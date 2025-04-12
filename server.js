@@ -34,51 +34,50 @@ app.get("/", (req, res) => {
 let lastRequests = [];
 
 app.get("/last-requests", (req, res) => {
-  res.json(lastRequests.slice(-5)); // Покажет 5 последних запросов
+  res.json(lastRequests.slice(-1)); // Покажет 5 последних запросов
 });
 
 // Обработчик вебхука
 app.post("/webhook", async (req, res) => {
-  lastRequests.push({
-    date: new Date().toISOString(),
-    headers: req.headers,
-    body: req.body,
-  });
-
   try {
-    const incomingSecret = req.headers["x-secret-key"];
-
-    // Проверка ключа
-    if (!secureCompare(incomingSecret, WEBHOOK_SECRET)) {
+    // Проверка ключа (оставьте вашу реализацию)
+    if (!secureCompare(req.headers["x-secret-key"], WEBHOOK_SECRET)) {
       return res.status(403).send("Forbidden");
     }
 
-    // Формирование сообщения
+    // Анализ структуры данных Remonline
+    const remonlineData = req.body;
+    console.log(
+      "Полные данные от Remonline:",
+      JSON.stringify(remonlineData, null, 2)
+    );
+
     let message;
-    switch (req.body.event_type) {
-      case "order_created":
-        message = `🆕 Новый заказ: ${req.body.order_id}\nКлиент: ${req.body.client_name}`;
-        break;
-      case "order_status_changed":
-        message = `🔄 Изменен статус заказа ${req.body.order_id}\nНовый статус: ${req.body.new_status}`;
-        break;
-      default:
-        message = `ℹ️ Новое событие: ${req.body.event_type}`;
+
+    // Обработка создания заказа
+    if (remonlineData.order && remonlineData.order.id) {
+      message =
+        `🆕 Новый заказ #${remonlineData.order.id}\n` +
+        `Клиент: ${remonlineData.client?.name || "Не указан"}\n` +
+        `Статус: ${remonlineData.order.status || "Новый"}`;
+    }
+    // Обработка изменения статуса
+    else if (remonlineData.status_changed) {
+      message =
+        `🔄 Изменён статус заказа #${remonlineData.order_id}\n` +
+        `Новый статус: ${remonlineData.new_status}`;
     }
 
-    // Добавьте в код перед отправкой в Telegram
-    console.log("Remonline данные:", JSON.stringify(req.body, null, 2));
-
-    // Отправка в Telegram
     if (message) {
-      console.log("Отправляем сообщение:", message);
       await sendTelegramMessage(message);
+      res.status(200).send("OK");
+    } else {
+      console.warn("Неизвестный формат данных:", remonlineData);
+      res.status(200).send("Unhandled event type");
     }
-
-    res.status(200).send("OK");
   } catch (error) {
-    console.error("Ошибка обработки вебхука:", error);
-    res.status(500).send("Internal Server Error");
+    console.error("Ошибка обработки:", error);
+    res.status(500).send("Server Error");
   }
 });
 
