@@ -20,56 +20,26 @@ app.get("/", (req, res) => {
 });
 
 // Обработчик вебхука
-app.post("/webhook", async (req, res) => {
-  try {
-    console.log("=== ПРОВЕРКА КЛЮЧА ===");
-    console.log("Ожидаемый ключ:", WEBHOOK_SECRET);
-    console.log("Тип ожидаемого ключа:", typeof WEBHOOK_SECRET);
-    console.log("Длина ожидаемого ключа:", WEBHOOK_SECRET.length);
-    console.log("Полученный ключ:", req.headers["x-secret-key"]);
-    console.log("Тип полученного ключа:", typeof req.headers["x-secret-key"]);
-    console.log(
-      "Длина полученного ключа:",
-      req.headers["x-secret-key"]?.length
-    );
+app.post("/webhook", (req, res) => {
+  // Получаем ключ всеми возможными способами
+  const incomingSecret =
+    req.headers["x-secret-key"] ||
+    req.headers["x-secret"] ||
+    req.headers["secret-key"] ||
+    req.headers["authorization"]?.replace("Bearer ", "");
 
-    // Проверка секретного ключа
-    const incomingSecret =
-      req.headers["x-secret-key"] ||
-      req.headers["x-secret"] ||
-      req.headers["secret-key"];
-    if (incomingSecret !== WEBHOOK_SECRET) {
-      console.warn("Неверный секретный ключ");
-      return res.status(403).send("Forbidden");
-    }
+  console.log("=== ПОЛНЫЕ ЗАГОЛОВКИ ===");
+  console.log(req.headers);
+  console.log("Извлеченный ключ:", incomingSecret);
+  console.log("Ожидаемый ключ:", WEBHOOK_SECRET);
 
-    console.log("Получен запрос:", {
-      headers: req.headers,
-      body: req.body,
-    });
-    const event = req.body;
-
-    // Формирование сообщения
-    let message = "";
-    switch (event.event_type) {
-      case "order_created":
-        message = `🆕 Новый заказ: ${event.order_id}\nКлиент: ${event.client_name}`;
-        break;
-      case "order_status_changed":
-        message = `🔄 Изменен статус заказа ${event.order_id}\nНовый статус: ${event.new_status}`;
-        break;
-      // Добавьте другие события по аналогии
-    }
-
-    if (message) {
-      await sendTelegramMessage(message);
-    }
-
-    res.status(200).send("OK");
-  } catch (error) {
-    console.error("Ошибка обработки вебхука:", error);
-    res.status(500).send("Internal Server Error");
+  if (!incomingSecret || incomingSecret !== WEBHOOK_SECRET) {
+    console.warn("Ошибка: Ключи не совпадают или отсутствуют");
+    return res.status(403).send("Forbidden");
   }
+
+  console.log("Успешная проверка ключа. Тело запроса:", req.body);
+  res.status(200).send("OK");
 });
 
 app.get("/test", (req, res) => {
