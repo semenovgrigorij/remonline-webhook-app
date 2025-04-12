@@ -22,8 +22,22 @@ app.get("/", (req, res) => {
 // Обработчик вебхука
 app.post("/webhook", async (req, res) => {
   try {
+    console.log("=== ПРОВЕРКА КЛЮЧА ===");
+    console.log("Ожидаемый ключ:", WEBHOOK_SECRET);
+    console.log("Тип ожидаемого ключа:", typeof WEBHOOK_SECRET);
+    console.log("Длина ожидаемого ключа:", WEBHOOK_SECRET.length);
+    console.log("Полученный ключ:", req.headers["x-secret-key"]);
+    console.log("Тип полученного ключа:", typeof req.headers["x-secret-key"]);
+    console.log(
+      "Длина полученного ключа:",
+      req.headers["x-secret-key"]?.length
+    );
+
     // Проверка секретного ключа
-    const incomingSecret = req.headers["x-secret-key"];
+    const incomingSecret =
+      req.headers["x-secret-key"] ||
+      req.headers["x-secret"] ||
+      req.headers["secret-key"];
     if (incomingSecret !== WEBHOOK_SECRET) {
       console.warn("Неверный секретный ключ");
       return res.status(403).send("Forbidden");
