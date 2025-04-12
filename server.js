@@ -31,8 +31,20 @@ app.get("/", (req, res) => {
   res.status(200).send("Вебхук для Remonline работает!");
 });
 
+let lastRequests = [];
+
+app.get("/last-requests", (req, res) => {
+  res.json(lastRequests.slice(-5)); // Покажет 5 последних запросов
+});
+
 // Обработчик вебхука
 app.post("/webhook", async (req, res) => {
+  lastRequests.push({
+    date: new Date().toISOString(),
+    headers: req.headers,
+    body: req.body,
+  });
+
   try {
     const incomingSecret = req.headers["x-secret-key"];
 
@@ -53,6 +65,9 @@ app.post("/webhook", async (req, res) => {
       default:
         message = `ℹ️ Новое событие: ${req.body.event_type}`;
     }
+
+    // Добавьте в код перед отправкой в Telegram
+    console.log("Remonline данные:", JSON.stringify(req.body, null, 2));
 
     // Отправка в Telegram
     if (message) {
