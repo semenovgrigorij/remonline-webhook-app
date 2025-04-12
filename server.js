@@ -81,6 +81,12 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+app.post("/webhook", (req, res) => {
+  console.log("=== RAW DATA FROM REMONLINE ===");
+  console.log(JSON.stringify(req.body, null, 2)); // Выведет полную структуру данных
+  res.status(200).send("OK");
+});
+
 app.get("/send-test", async (req, res) => {
   try {
     console.log("=== ТЕСТОВАЯ ОТПРАВКА ===");
