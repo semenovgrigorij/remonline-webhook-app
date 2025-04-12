@@ -32,15 +32,16 @@ app.get("/last-requests", (req, res) => {
 
 // Вебхук от Remonline
 app.post("/webhook", async (req, res) => {
-  console.log("Получены заголовки:", req.headers);
-  console.log("Получено тело запроса:", req.body);
   try {
-    const signature = req.headers["x-secret-key"];
+    const signature = req.headers["x-signature"];
 
-    if (!secureCompare(signature, WEBHOOK_SECRET)) {
-      console.warn("🚫 Неверный секретный ключ:", signature);
-      return res.status(403).send("Forbidden");
-    }
+    console.log("Полученная подпись:", signature);
+    console.log("Секретный ключ:", WEBHOOK_SECRET);
+
+    // if (!secureCompare(signature, WEBHOOK_SECRET)) {
+    //   console.warn("🚫 Неверный секретный ключ:", signature);
+    //   return res.status(403).send("Forbidden");
+    // }
 
     const data = req.body;
     console.log("🔥 Получен запрос от Remonline!");
@@ -52,20 +53,22 @@ app.post("/webhook", async (req, res) => {
 
     let message;
 
-    if (data.order && data.order.id) {
+    if (data.event_name === "Order.Deleted") {
       message =
-        `🆕 Новый заказ #${data.order.id}\n` +
-        `Клиент: ${data.client?.name || "Не указан"}\n` +
-        `Статус: ${data.order.status || "Новый"}`;
-    } else if (data.status_changed) {
+        `🗑️ Удален заказ #${data.metadata.order.id}\n` +
+        `Название: ${data.metadata.order.name}\n` +
+        `Сотрудник: ${data.employee?.full_name || "Неизвестно"}`;
+    } else if (data.event_name === "Order.Created") {
       message =
-        `🔄 Изменён статус заказа #${data.order_id}\n` +
-        `Новый статус: ${data.new_status}`;
+        `🆕 Новый заказ #${data.metadata.order?.id}\n` +
+        `Название: ${data.metadata.order?.name || "Без названия"}\n` +
+        `Сотрудник: ${data.employee?.full_name || "Неизвестно"}`;
     } else {
       message =
-        "📦 Необработанный тип события:\n```json\n" +
-        JSON.stringify(data, null, 2) +
-        "\n```";
+        `📦 Событие ${data.event_name}:\n` +
+        `ID: ${data.id}\n` +
+        `Время: ${data.created_at}\n` +
+        `Объект: ${data.context?.object_type} #${data.context?.object_id}`;
     }
 
     await sendTelegramMessage(message);
@@ -109,12 +112,18 @@ async function sendTelegramMessage(text) {
     parse_mode: "Markdown",
   };
 
+  console.log("Отправка в Telegram с параметрами:", {
+    url,
+    chat_id: TELEGRAM_CHAT_ID,
+    textLength: text.length,
+    botToken: TELEGRAM_TOKEN
+      ? `${TELEGRAM_TOKEN.substring(0, 5)}...`
+      : "отсутствует",
+  });
+
   try {
-    const response = await axios.post(url, payload, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 5000,
-    });
-    console.log("✅ Сообщение Telegram отправлено:", response.data);
+    const response = await axios.post(url, payload);
+    console.log("✅ Ответ от Telegram API:", response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Ошибка отправки в Telegram:", {
