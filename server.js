@@ -29,7 +29,10 @@ app.post("/webhook", async (req, res) => {
       return res.status(403).send("Forbidden");
     }
 
-    console.log("Получено сообщение WebHook:", req.body);
+    console.log("Получен запрос:", {
+      headers: req.headers,
+      body: req.body,
+    });
     const event = req.body;
 
     // Формирование сообщения
@@ -53,6 +56,12 @@ app.post("/webhook", async (req, res) => {
     console.error("Ошибка обработки вебхука:", error);
     res.status(500).send("Internal Server Error");
   }
+});
+
+app.get("/test", (req, res) => {
+  sendTelegramMessage("Тест от сервера")
+    .then(() => res.send("Сообщение отправлено"))
+    .catch((err) => res.status(500).send("Ошибка: " + err.message));
 });
 
 // Отправка сообщения в Telegram
