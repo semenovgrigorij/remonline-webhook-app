@@ -1,8 +1,22 @@
 {
+  "name": "remonline-webhook-app",
+  "version": "1.0.0",
+  "description": "Webhook сервер для получения событий от Remonline и отправки в Telegram",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
   "dependencies": {
     "axios": "^1.8.4",
     "body-parser": "^2.2.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0"
-  }
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
 }

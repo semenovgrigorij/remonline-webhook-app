@@ -1,9 +1,92 @@
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const crypto = require("crypto");
 require("dotenv").config();
 
+const app = express();
+
+// Конфигурация (лучше через .env)
+const TELEGRAM_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN ||
+  "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
+
+// Поддержка JSON и x-www-form-urlencoded
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Проверка работоспособности
+app.get("/", (req, res) => {
+  res.status(200).send("✅ Вебхук для Remonline работает!");
+});
+
+// Хранилище последних запросов
+let lastRequests = [];
+
+app.get("/last-requests", (req, res) => {
+  res.json(lastRequests.slice(-5));
+});
+
+// Вебхук от Remonline
+app.post("/webhook", async (req, res) => {
+  try {
+    const signature = req.headers["x-secret-key"];
+
+    if (!secureCompare(signature, WEBHOOK_SECRET)) {
+      console.warn("🚫 Неверный секретный ключ:", signature);
+      return res.status(403).send("Forbidden");
+    }
+
+    const data = req.body;
+    console.log("🔥 Получен запрос от Remonline!");
+    console.log(JSON.stringify(data, null, 2));
+
+    // Добавление запроса в хранилище
+    lastRequests.push(data);
+    if (lastRequests.length > 10) lastRequests.shift();
+
+    let message;
+
+    if (data.order && data.order.id) {
+      message =
+        `🆕 Новый заказ #${data.order.id}\n` +
+        `Клиент: ${data.client?.name || "Не указан"}\n` +
+        `Статус: ${data.order.status || "Новый"}`;
+    } else if (data.status_changed) {
+      message =
+        `🔄 Изменён статус заказа #${data.order_id}\n` +
+        `Новый статус: ${data.new_status}`;
+    } else {
+      message =
+        "📦 Необработанный тип события:\n```json\n" +
+        JSON.stringify(data, null, 2) +
+        "\n```";
+    }
+
+    await sendTelegramMessage(message);
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("❌ Ошибка обработки запроса:", error);
+    res.status(500).send("Server Error");
+  }
+});
+
+// Тестовая отправка
+app.get("/send-test", async (req, res) => {
+  try {
+    const testMessage = "🧪 Тестовое сообщение в " + new Date().toISOString();
+    await sendTelegramMessage(testMessage);
+    res.send("Сообщение отправлено: " + testMessage);
+  } catch (error) {
+    console.error("❌ Ошибка при отправке тестового сообщения:", error);
+    res.status(500).send("Ошибка: " + error.message);
+  }
+});
+
+// Сравнение ключей безопасным способом
 function secureCompare(a, b) {
   try {
     return crypto.timingSafeEqual(
@@ -15,126 +98,24 @@ function secureCompare(a, b) {
   }
 }
 
-const app = express();
-
-// Конфигурация (лучше хранить в .env)
-const TELEGRAM_TOKEN =
-  process.env.TELEGRAM_TOKEN ||
-  "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Проверка работоспособности
-app.get("/", (req, res) => {
-  res.status(200).send("Вебхук для Remonline работает!");
-});
-
-let lastRequests = [];
-
-app.get("/last-requests", (req, res) => {
-  res.json(lastRequests.slice(-5)); // Покажет 5 последних запросов
-});
-
-// Обработчик вебхука
-app.post("/webhook", async (req, res) => {
-  try {
-    if (!secureCompare(req.headers["x-secret-key"], WEBHOOK_SECRET)) {
-      return res.status(403).send("Forbidden");
-    }
-
-    const remonlineData = req.body;
-    console.log("🔥 Получен запрос от Remonline!");
-    console.log(
-      "Полные данные от Remonline:",
-      JSON.stringify(remonlineData, null, 2)
-    );
-
-    // 🟢 Добавляем в список последних запросов
-    lastRequests.push(remonlineData);
-    if (lastRequests.length > 10) lastRequests.shift(); // ограничим 10 запросами
-
-    let message;
-
-    if (remonlineData.order && remonlineData.order.id) {
-      message =
-        `🆕 Новый заказ #${remonlineData.order.id}\n` +
-        `Клиент: ${remonlineData.client?.name || "Не указан"}\n` +
-        `Статус: ${remonlineData.order.status || "Новый"}`;
-    } else if (remonlineData.status_changed) {
-      message =
-        `🔄 Изменён статус заказа #${remonlineData.order_id}\n` +
-        `Новый статус: ${remonlineData.new_status}`;
-    }
-
-    if (message) {
-      await sendTelegramMessage(message);
-      res.status(200).send("OK");
-    } else {
-      console.warn("Неизвестный формат данных:", remonlineData);
-      res.status(200).send("Unhandled event type");
-    }
-  } catch (error) {
-    console.error("Ошибка обработки:", error);
-    res.status(500).send("Server Error");
-  }
-});
-
-app.get("/send-test", async (req, res) => {
-  try {
-    console.log("=== ТЕСТОВАЯ ОТПРАВКА ===");
-
-    const testMessage = "Тестовое сообщение в " + new Date().toISOString();
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-
-    console.log("Используемые параметры:", {
-      token: TELEGRAM_TOKEN,
-      chatId: TELEGRAM_CHAT_ID,
-      url: url,
-    });
-
-    const response = await axios.post(url, {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: testMessage,
-      parse_mode: "Markdown",
-    });
-
-    console.log("Успешный ответ Telegram:", response.data);
-    res.send("Сообщение отправлено: " + testMessage);
-  } catch (error) {
-    console.error("Полная ошибка:", {
-      message: error.message,
-      response: error.response?.data,
-      config: error.config,
-    });
-    res.status(500).send("Ошибка: " + error.message);
-  }
-});
-
-// Отправка сообщения в Telegram
+// Отправка в Telegram
 async function sendTelegramMessage(text) {
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-  const data = {
-    chat_id: Number(TELEGRAM_CHAT_ID), // Гарантированно число
-    text: text,
+  const payload = {
+    chat_id: TELEGRAM_CHAT_ID,
+    text,
     parse_mode: "Markdown",
   };
 
-  console.log("Отправка в Telegram:", { url, data });
-
   try {
-    const response = await axios.post(url, data, {
-      headers: {
-        "Content-Type": "application/json",
-      },
+    const response = await axios.post(url, payload, {
+      headers: { "Content-Type": "application/json" },
       timeout: 5000,
     });
-    console.log("Успешно отправлено:", response.data);
+    console.log("✅ Сообщение Telegram отправлено:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Ошибка Telegram API:", {
+    console.error("❌ Ошибка отправки в Telegram:", {
       status: error.response?.status,
       data: error.response?.data,
       message: error.message,
@@ -145,5 +126,5 @@ async function sendTelegramMessage(text) {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
