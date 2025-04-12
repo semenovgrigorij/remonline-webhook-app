@@ -51,6 +51,7 @@ app.post("/webhook", async (req, res) => {
       "Полные данные от Remonline:",
       JSON.stringify(remonlineData, null, 2)
     );
+    lastRequests.push(remonlineData);
 
     let message;
 
