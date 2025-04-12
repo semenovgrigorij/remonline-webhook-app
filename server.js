@@ -39,13 +39,13 @@ app.get("/last-requests", (req, res) => {
 
 // Обработчик вебхука
 app.post("/webhook", async (req, res) => {
+  console.log("🔥 Получен запрос от Remonline!");
+
   try {
-    // Проверка ключа (оставьте вашу реализацию)
     if (!secureCompare(req.headers["x-secret-key"], WEBHOOK_SECRET)) {
       return res.status(403).send("Forbidden");
     }
 
-    // Анализ структуры данных Remonline
     const remonlineData = req.body;
     console.log(
       "Полные данные от Remonline:",
@@ -54,18 +54,12 @@ app.post("/webhook", async (req, res) => {
 
     let message;
 
-    // Обработка создания заказа
     if (remonlineData.order && remonlineData.order.id) {
-      message =
-        `🆕 Новый заказ #${remonlineData.order.id}\n` +
-        `Клиент: ${remonlineData.client?.name || "Не указан"}\n` +
-        `Статус: ${remonlineData.order.status || "Новый"}`;
-    }
-    // Обработка изменения статуса
-    else if (remonlineData.status_changed) {
-      message =
-        `🔄 Изменён статус заказа #${remonlineData.order_id}\n` +
-        `Новый статус: ${remonlineData.new_status}`;
+      message = `🆕 Новый заказ #${remonlineData.order.id}\nКлиент: ${
+        remonlineData.client?.name || "Не указан"
+      }\nСтатус: ${remonlineData.order.status || "Новый"}`;
+    } else if (remonlineData.status_changed) {
+      message = `🔄 Изменён статус заказа #${remonlineData.order_id}\nНовый статус: ${remonlineData.new_status}`;
     }
 
     if (message) {
@@ -79,12 +73,6 @@ app.post("/webhook", async (req, res) => {
     console.error("Ошибка обработки:", error);
     res.status(500).send("Server Error");
   }
-});
-
-app.post("/webhook", (req, res) => {
-  console.log("=== RAW DATA FROM REMONLINE ===");
-  console.log(JSON.stringify(req.body, null, 2)); // Выведет полную структуру данных
-  res.status(200).send("OK");
 });
 
 app.get("/send-test", async (req, res) => {
