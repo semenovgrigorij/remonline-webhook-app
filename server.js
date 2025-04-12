@@ -51,7 +51,9 @@ app.post("/webhook", async (req, res) => {
       JSON.stringify(remonlineData, null, 2)
     );
 
-    lastRequests.push(remonlineData); // ← Добавь сюда, чтобы /last-requests заработал
+    // 🟢 Добавляем в список последних запросов
+    lastRequests.push(remonlineData);
+    if (lastRequests.length > 10) lastRequests.shift(); // ограничим 10 запросами
 
     let message;
 
