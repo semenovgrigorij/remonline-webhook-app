@@ -11,8 +11,8 @@ const app = express();
 const TELEGRAM_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN ||
   "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 // Поддержка JSON и x-www-form-urlencoded
 app.use(bodyParser.json());
@@ -32,6 +32,8 @@ app.get("/last-requests", (req, res) => {
 
 // Вебхук от Remonline
 app.post("/webhook", async (req, res) => {
+  console.log("Получены заголовки:", req.headers);
+  console.log("Получено тело запроса:", req.body);
   try {
     const signature = req.headers["x-secret-key"];
 
