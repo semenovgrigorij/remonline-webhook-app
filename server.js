@@ -34,7 +34,7 @@ app.get("/", (req, res) => {
 let lastRequests = [];
 
 app.get("/last-requests", (req, res) => {
-  res.json(lastRequests.slice(-1)); // Покажет 5 последних запросов
+  res.json(lastRequests.slice(-5)); // Покажет 5 последних запросов
 });
 
 // Обработчик вебхука
