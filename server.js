@@ -39,28 +39,31 @@ app.get("/last-requests", (req, res) => {
 
 // Обработчик вебхука
 app.post("/webhook", async (req, res) => {
-  console.log("🔥 Получен запрос от Remonline!");
-
   try {
     if (!secureCompare(req.headers["x-secret-key"], WEBHOOK_SECRET)) {
       return res.status(403).send("Forbidden");
     }
 
     const remonlineData = req.body;
+    console.log("🔥 Получен запрос от Remonline!");
     console.log(
       "Полные данные от Remonline:",
       JSON.stringify(remonlineData, null, 2)
     );
-    lastRequests.push(remonlineData);
+
+    lastRequests.push(remonlineData); // ← Добавь сюда, чтобы /last-requests заработал
 
     let message;
 
     if (remonlineData.order && remonlineData.order.id) {
-      message = `🆕 Новый заказ #${remonlineData.order.id}\nКлиент: ${
-        remonlineData.client?.name || "Не указан"
-      }\nСтатус: ${remonlineData.order.status || "Новый"}`;
+      message =
+        `🆕 Новый заказ #${remonlineData.order.id}\n` +
+        `Клиент: ${remonlineData.client?.name || "Не указан"}\n` +
+        `Статус: ${remonlineData.order.status || "Новый"}`;
     } else if (remonlineData.status_changed) {
-      message = `🔄 Изменён статус заказа #${remonlineData.order_id}\nНовый статус: ${remonlineData.new_status}`;
+      message =
+        `🔄 Изменён статус заказа #${remonlineData.order_id}\n` +
+        `Новый статус: ${remonlineData.new_status}`;
     }
 
     if (message) {
