@@ -52,10 +52,10 @@ const eventHandlers = {
     
     const cachedData = orderCache.get(data.metadata.order.id) || {};
     
-    return `🔄 *Автозапись #${data.metadata.order.id}*\n` +
-           `📝 Название: \`${data.metadata.order.name}\`\n` +
-           `👤 Клиент: ${cachedData.client?.fullname || "Не указан"}\n` +
-           `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не указана"}`;
+    return `🔄 *Автозапис із сайту #${data.metadata.order.id}*\n` +
+           `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
+           `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
+           `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не вказано"}`;
 },
 /* "Order.Status.Changed": async (data) => {
     const newStatusId = data.metadata.new.id;
