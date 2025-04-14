@@ -25,10 +25,6 @@ const AUTO_APPOINTMENT_STATUS_ID = 1642511;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Кеширование названий статусов (для примера)
-const statusNamesCache = {};
-statusNamesCache[AUTO_APPOINTMENT_STATUS_ID] = "Автозапис";
-
 // Проверка работоспособности
 app.get("/", (req, res) => {
   res.status(200).send("✅ Вебхук для Remonline работает!");
@@ -52,42 +48,32 @@ const eventHandlers = {
     return null; // Пропускаем уведомление при создании
 },
 "Order.Status.Changed": async (data) => {
-    const newStatusId = data.metadata.new.id;
-    if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
-
-    // Получаем данные из кеша
+    if (data.metadata.new.id !== AUTO_APPOINTMENT_STATUS_ID) return null;
+    
     const cachedData = orderCache.get(data.metadata.order.id) || {};
     
     return `🔄 *Автозапись #${data.metadata.order.id}*\n` +
            `📝 Название: \`${data.metadata.order.name}\`\n` +
            `👤 Клиент: ${cachedData.client?.fullname || "Не указан"}\n` +
            `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не указана"}`;
-},
+}
+/* "Order.Status.Changed": async (data) => {
+    const newStatusId = data.metadata.new.id;
+    if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
+
+    // Получаем данные из кеша
+    const cachedData = orderCache.get(data.metadata.order.id) || {};
+    
+    return `🔄 *Автозапис із сайту #${data.metadata.order.id}*\n` +
+           `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
+           `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
+           `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не вказано"}`;
+}, */
   "Order.Deleted": (data) => {
     return (
-      `🗑️ *Удален заказ #${data.metadata.order.id}*\n` +
-      `📝 Название: \`${data.metadata.order.name}\`\n` +
-      `👨‍💼 Сотрудник: ${data.employee?.full_name || "Неизвестно"}`
-    );
-  },
-  "Order.Manager.Changed": (data) => {
-    const oldManager = data.metadata.old?.full_name || "Не назначен";
-    const newManager = data.metadata.new?.full_name || "Не назначен";
-
-    return (
-      `👨‍💼 *Изменен менеджер заказа #${data.metadata.order.id}*\n` +
-      `📝 Название: \`${data.metadata.order.name}\`\n` +
-      `Менеджер: ${oldManager} ➡️ ${newManager}`
-    );
-  },
-  "Order.Engineer.Changed": (data) => {
-    const oldEngineer = data.metadata.old?.full_name || "Не назначен";
-    const newEngineer = data.metadata.new?.full_name || "Не назначен";
-
-    return (
-      `🔧 *Изменен исполнитель заказа #${data.metadata.order.id}*\n` +
-      `📝 Название: \`${data.metadata.order.name}\`\n` +
-      `Исполнитель: ${oldEngineer} ➡️ ${newEngineer}`
+      `🗑️ *Видалено замовлення #${data.metadata.order.id}*\n` +
+      `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
+      `👨‍💼 Співробітник: ${data.employee?.full_name || "Невідомо"}`
     );
   },
 };
@@ -169,28 +155,6 @@ function formatDate(isoDate) {
   } catch (e) {
     return isoDate; // В случае ошибки возвращаем исходную строку
   }
-}
-
-// Получение названия статуса (заглушка, в реальном приложении - API запрос)
-async function getStatusName(statusId) {
-  // Проверяем кеш
-  if (statusNamesCache[statusId]) {
-    return statusNamesCache[statusId];
-  }
-
-  // В реальном приложении здесь будет API-запрос к Remonline для получения названия статуса
-  // Для примера используем заглушки
-  const statusNames = {
-    1342663: "Новый",
-    1642511: "В работе",
-    3456789: "Готов к выдаче",
-    4567890: "Выдан",
-    5678901: "Отменен",
-  };
-
-  // Сохраняем в кеш
-  statusNamesCache[statusId] = statusNames[statusId] || `ID: ${statusId}`;
-  return statusNamesCache[statusId];
 }
 
 // Отправка в Telegram с повторными попытками
