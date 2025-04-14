@@ -1,3 +1,4 @@
+const orderCache = new Map(); // Хранит данные заказов
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
@@ -43,30 +44,24 @@ app.get("/last-requests", (req, res) => {
 // Объект для обработки разных типов событий
 const eventHandlers = {
 "Order.Created": async (data) => {
-    console.log("ℹ️ Заказ создан, но статус ещё не 'Автозапис'. Пропускаем.");
-    return null; // Не отправляем уведомление
+    // Сохраняем данные заказа в кеш
+    orderCache.set(data.metadata.order.id, {
+        client: data.metadata.client,
+        asset: data.metadata.asset
+    });
+    return null; // Пропускаем уведомление при создании
 },
 "Order.Status.Changed": async (data) => {
-    console.log("Старый статус:", data.metadata.old.id);
-    console.log("Новый статус:", data.metadata.new.id);
-    console.log("Client data:", JSON.stringify(data.metadata.client, null, 2));
-    console.log("Asset data:", JSON.stringify(data.metadata.asset, null, 2));
     const newStatusId = data.metadata.new.id;
-    
-    // Проверяем, что новый статус = "Автозапис" (ID=1642511)
     if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
 
-    // Формируем сообщение только для перевода в "Автозапис"
-    const orderName = escapeMarkdown(data.metadata.order?.name || "Без назви");
-    const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не вказано");
-    const assetName = escapeMarkdown(data.metadata.asset?.name?.trim() || "Не вказано");
-    const employeeName = escapeMarkdown(data.employee?.full_name || "Невідомо");
-
-    return `🔄 *Автозапис  #${data.metadata.order.id}*\n` +
-           `📝 Назва: \`${orderName}\`\n` +
-           `👤 Клієнт: ${clientName}\n` +
-           `📱 Марка авто: ${assetName}\n` +
-           `👨‍💼 Працівник: ${employeeName}`;
+    // Получаем данные из кеша
+    const cachedData = orderCache.get(data.metadata.order.id) || {};
+    
+    return `🔄 *Автозапись #${data.metadata.order.id}*\n` +
+           `📝 Название: \`${data.metadata.order.name}\`\n` +
+           `👤 Клиент: ${cachedData.client?.fullname || "Не указан"}\n` +
+           `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не указана"}`;
 },
   "Order.Deleted": (data) => {
     return (
