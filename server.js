@@ -49,25 +49,24 @@ const eventHandlers = {
 "Order.Status.Changed": async (data) => {
     console.log("Старый статус:", data.metadata.old.id);
     console.log("Новый статус:", data.metadata.new.id);
+    console.log("Client data:", JSON.stringify(data.metadata.client, null, 2));
+    console.log("Asset data:", JSON.stringify(data.metadata.asset, null, 2));
     const newStatusId = data.metadata.new.id;
     
     // Проверяем, что новый статус = "Автозапис" (ID=1642511)
-    if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) {
-        console.log("❌ Статус изменён, но не на 'Автозапис'. Пропускаем.");
-        return null;
-    }
+    if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
 
     // Формируем сообщение только для перевода в "Автозапис"
-    const orderName = escapeMarkdown(data.metadata.order?.name || "Без названия");
-    const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не указан");
-    const assetName = escapeMarkdown(data.metadata.asset?.name || "Не указана");
-    const employeeName = escapeMarkdown(data.employee?.full_name || "Неизвестно");
+    const orderName = escapeMarkdown(data.metadata.order?.name || "Без назви");
+    const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не вказано");
+    const assetName = escapeMarkdown(data.metadata.asset?.name?.trim() || "Не вказано");
+    const employeeName = escapeMarkdown(data.employee?.full_name || "Невідомо");
 
-    return `🔄 *Автозапись #${data.metadata.order.id}*\n` +
-           `📝 Название: \`${orderName}\`\n` +
-           `👤 Клиент: ${clientName}\n` +
+    return `🔄 *Автозапис  #${data.metadata.order.id}*\n` +
+           `📝 Назва: \`${orderName}\`\n` +
+           `👤 Клієнт: ${clientName}\n` +
            `📱 Марка авто: ${assetName}\n` +
-           `👨‍💼 Сотрудник: ${employeeName}`;
+           `👨‍💼 Працівник: ${employeeName}`;
 },
   "Order.Deleted": (data) => {
     return (
@@ -273,5 +272,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
+
+
 
 
