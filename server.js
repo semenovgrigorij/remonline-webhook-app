@@ -4,6 +4,12 @@ const axios = require("axios");
 const crypto = require("crypto");
 require("dotenv").config();
 
+// Функция для экранирования спецсимволов Markdown
+function escapeMarkdown(text) {
+  if (!text) return text;
+  return String(text).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 const app = express();
 
 // Конфигурация
