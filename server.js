@@ -56,7 +56,7 @@ const eventHandlers = {
            `📝 Название: \`${data.metadata.order.name}\`\n` +
            `👤 Клиент: ${cachedData.client?.fullname || "Не указан"}\n` +
            `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не указана"}`;
-}
+},
 /* "Order.Status.Changed": async (data) => {
     const newStatusId = data.metadata.new.id;
     if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
