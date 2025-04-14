@@ -43,19 +43,24 @@ app.get("/last-requests", (req, res) => {
 // Объект для обработки разных типов событий
 const eventHandlers = {
   "Order.Created": async (data) => {
-    const isAutoAppointment = data.metadata.status && 
-                             data.metadata.status.id === AUTO_APPOINTMENT_STATUS_ID;
-    const statusName = await getStatusName(data.metadata.status?.id || AUTO_APPOINTMENT_STATUS_ID);
+    // Проверяем, что статус заказа = 1642511 ("Автозапис")
+    const isAutoAppointment = data.metadata.status?.id === AUTO_APPOINTMENT_STATUS_ID;
     
+    // Если статус НЕ "Автозапис" — пропускаем отправку
+    if (!isAutoAppointment) {
+        console.log("❌ Заказ не имеет статуса 'Автозапис', пропускаем отправку.");
+        return null; // Возвращаем null, чтобы sendTelegramMessageWithRetry не выполнялся
+    }
+
+    // Формируем сообщение ТОЛЬКО для статуса "Автозапис"
     const orderName = escapeMarkdown(data.metadata.order?.name || "Без названия");
     const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не указан");
     const assetName = escapeMarkdown(data.metadata.asset?.name || "Не указана");
     const employeeName = escapeMarkdown(data.employee?.full_name || "Неизвестно");
 
-    return `🆕 *${isAutoAppointment ? "Автозапись" : "Новый заказ"} #${data.metadata.order.id}*\n` +
+    return `🆕 *Автозапись #${data.metadata.order.id}*\n` +
            `📝 Название: \`${orderName}\`\n` +
            `👤 Клиент: ${clientName}\n` +
-           `📊 Статус: ${isAutoAppointment ? "Автозапис" : statusName}\n` +
            `📱 Марка авто: ${assetName}\n` +
            `👨‍💼 Сотрудник: ${employeeName}`;
 },
@@ -104,63 +109,57 @@ const eventHandlers = {
 app.post("/webhook", async (req, res) => {
   try {
     const data = req.body;
-    console.log("🔥 Получен запрос от Remonline!");
-    console.log(JSON.stringify(data, null, 2));
+    console.log("🔥 Получен запрос от Remonline:", data.event_name);
 
-    // Добавление запроса в хранилище
-    lastRequests.push(data);
-    if (lastRequests.length > 10) lastRequests.shift();
-
-    // Определение типа события и формирование сообщения
     const handler = eventHandlers[data.event_name];
     let message;
 
     if (handler) {
-      // Если обработчик возвращает Promise (для асинхронных операций)
-      if (handler.constructor.name === "AsyncFunction") {
-        message = await handler(data);
-      } else {
-        message = handler(data);
+      message = await handler(data);
+      
+      // Если handler вернул null (статус не "Автозапис") — пропускаем отправку
+      if (message === null) {
+        console.log("⏩ Пропуск отправки: статус не 'Автозапис'");
+        return res.status(200).send("OK (не автозапись)");
       }
     } else {
-      // Обработчик по умолчанию
-      message =
-        `📦 *Событие ${data.event_name}*:\n` +
-        `ID: \`${data.id}\`\n` +
-        `⏰ Время: ${formatDate(data.created_at)}\n` +
-        `🔍 Объект: \`${data.context?.object_type} #${data.context?.object_id}\``;
+      message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
     }
 
-    // Отправка сообщения в Telegram с повторными попытками
     await sendTelegramMessageWithRetry(message);
-
     res.status(200).send("OK");
   } catch (error) {
     console.error("❌ Ошибка обработки запроса:", error);
-    // Логируем ошибку, но отвечаем успехом, чтобы Remonline не переотправлял запрос
     res.status(200).send("Error handled");
-
-    // Отправляем уведомление об ошибке в Telegram
-    try {
-      await sendTelegramMessageWithRetry(
-        `⚠️ *Ошибка обработки вебхука*\n\`\`\`\n${error.message}\n\`\`\``
-      );
-    } catch (telegramError) {
-      console.error(
-        "❌ Не удалось отправить уведомление об ошибке:",
-        telegramError
-      );
-    }
   }
 });
 
 // Тестовая отправка
 app.get("/send-test", async (req, res) => {
+  const statusId = req.query.status_id || 1642511;
   try {
-    const testMessage =
-      "🧪 *Тестовое сообщение* в " + formatDate(new Date().toISOString());
-    await sendTelegramMessageWithRetry(testMessage);
-    res.send("Сообщение отправлено: " + testMessage);
+    // Создаем тестовые данные, имитирующие заказ со статусом "Автозапис"
+    const testData = {
+      event_name: "Order.Created",
+      metadata: {
+        status: { id: 1642511 }, // ID статуса "Автозапис"
+        order: { id: 999, name: "Тестовый заказ" },
+        client: { fullname: "Иван Иванов" },
+        asset: { name: "Toyota Camry" },
+        employee: { full_name: "Менеджер Петров" }
+      }
+    };
+
+    // Используем тот же обработчик, что и для реальных запросов
+    const handler = eventHandlers["Order.Created"];
+    const message = await handler(testData);
+
+    if (!message) {
+      return res.status(200).send("Тестовое сообщение не отправлено: статус не 'Автозапис'");
+    }
+
+    await sendTelegramMessageWithRetry(message);
+    res.send("✅ Тестовое сообщение отправлено: " + message);
   } catch (error) {
     console.error("❌ Ошибка при отправке тестового сообщения:", error);
     res.status(500).send("Ошибка: " + error.message);
