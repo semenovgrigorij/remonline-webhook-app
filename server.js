@@ -12,6 +12,7 @@ const TELEGRAM_TOKEN =
   "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
+const AUTO_APPOINTMENT_STATUS_ID = 1642511;
 
 // Поддержка JSON и x-www-form-urlencoded
 app.use(bodyParser.json());
@@ -19,6 +20,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Кеширование названий статусов (для примера)
 const statusNamesCache = {};
+statusNamesCache[AUTO_APPOINTMENT_STATUS_ID] = "Автозапис";
 
 // Проверка работоспособности
 app.get("/", (req, res) => {
@@ -35,26 +37,14 @@ app.get("/last-requests", (req, res) => {
 // Объект для обработки разных типов событий
 const eventHandlers = {
   "Order.Created": (data) => {
-    return (
-      `🆕 *Новый заказ #${data.metadata.order.id}*\n` +
-      `📝 Название: \`${data.metadata.order.name}\`\n` +
-      `${
-        data.metadata.client
-          ? `👤 Клиент: ${data.metadata.client.fullname}\n`
-          : ""
-      }` +
-      `${
-        data.metadata.status
-          ? `📊 Статус: ${getStatusName(data.metadata.status.id)}\n`
-          : ""
-      }` +
-      `${
-        data.metadata.asset?.name
-          ? `📱 Устройство: ${data.metadata.asset.name}\n`
-          : ""
-      }` +
-      `👨‍💼 Сотрудник: ${data.employee?.full_name || "Неизвестно"}`
-    );
+    const isAutoAppointment = data.metadata.status && 
+                             data.metadata.status.id === AUTO_APPOINTMENT_STATUS_ID;
+                             return `🆕 *${isAutoAppointment ? "Автозапись" : "Новый заказ"} #${data.metadata.order.id}*\n` +
+                             `📝 Название: \`${data.metadata.order.name}\`\n` +
+                             `${data.metadata.client ? `👤 Клиент: ${data.metadata.client.fullname}\n` : ''}` +
+                             `📊 Статус: ${isAutoAppointment ? "Автозапис" : getStatusName(data.metadata.status?.id || AUTO_APPOINTMENT_STATUS_ID)}\n` +
+                             `${data.metadata.asset?.name ? `📱 Марка авто: ${data.metadata.asset.name}\n` : ''}` +
+                             `👨‍💼 Сотрудник: ${data.employee?.full_name || "Неизвестно"}`;
   },
   "Order.Status.Changed": async (data) => {
     // Получим названия статусов (в реальном приложении использовать API Remonline)
