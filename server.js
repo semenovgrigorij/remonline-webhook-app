@@ -100,6 +100,7 @@ const eventHandlers = {
 
 // Вебхук от Remonline
 app.post("/webhook", async (req, res) => {
+  console.log("Raw webhook data:", JSON.stringify(req.body, null, 2));
   try {
     const data = req.body;
     console.log("🔥 Получен запрос от Remonline:", data.event_name);
