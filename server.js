@@ -36,17 +36,22 @@ app.get("/last-requests", (req, res) => {
 
 // Объект для обработки разных типов событий
 const eventHandlers = {
-  "Order.Created": async (data) => { // Добавляем async
+  "Order.Created": async (data) => {
     const isAutoAppointment = data.metadata.status && 
                              data.metadata.status.id === AUTO_APPOINTMENT_STATUS_ID;
-    const statusName = await getStatusName(data.metadata.status?.id || AUTO_APPOINTMENT_STATUS_ID); // Добавляем await
-                             
+    const statusName = await getStatusName(data.metadata.status?.id || AUTO_APPOINTMENT_STATUS_ID);
+    
+    const orderName = escapeMarkdown(data.metadata.order?.name || "Без названия");
+    const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не указан");
+    const assetName = escapeMarkdown(data.metadata.asset?.name || "Не указана");
+    const employeeName = escapeMarkdown(data.employee?.full_name || "Неизвестно");
+
     return `🆕 *${isAutoAppointment ? "Автозапись" : "Новый заказ"} #${data.metadata.order.id}*\n` +
-           `📝 Название: \`${data.metadata.order.name}\`\n` +
-           `${data.metadata.client ? `👤 Клиент: ${data.metadata.client.fullname}\n` : ''}` +
-           `📊 Статус: ${isAutoAppointment ? "Автозапис" : statusName}\n` + // Используем полученное значение
-           `${data.metadata.asset?.name ? `📱 Марка авто: ${data.metadata.asset.name}\n` : ''}` +
-           `👨‍💼 Сотрудник: ${data.employee?.full_name || "Неизвестно"}`;
+           `📝 Название: \`${orderName}\`\n` +
+           `👤 Клиент: ${clientName}\n` +
+           `📊 Статус: ${isAutoAppointment ? "Автозапис" : statusName}\n` +
+           `📱 Марка авто: ${assetName}\n` +
+           `👨‍💼 Сотрудник: ${employeeName}`;
 },
   "Order.Status.Changed": async (data) => {
     // Получим названия статусов (в реальном приложении использовать API Remonline)
