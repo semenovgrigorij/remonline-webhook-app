@@ -42,40 +42,33 @@ app.get("/last-requests", (req, res) => {
 
 // Объект для обработки разных типов событий
 const eventHandlers = {
-  "Order.Created": async (data) => {
-    // Проверяем, что статус заказа = 1642511 ("Автозапис")
-    const isAutoAppointment = data.metadata.status?.id === AUTO_APPOINTMENT_STATUS_ID;
+"Order.Created": async (data) => {
+    console.log("ℹ️ Заказ создан, но статус ещё не 'Автозапис'. Пропускаем.");
+    return null; // Не отправляем уведомление
+},
+"Order.Status.Changed": async (data) => {
+    console.log("Старый статус:", data.metadata.old.id);
+    console.log("Новый статус:", data.metadata.new.id);
+    const newStatusId = data.metadata.new.id;
     
-    // Если статус НЕ "Автозапис" — пропускаем отправку
-    if (!isAutoAppointment) {
-        console.log("❌ Заказ не имеет статуса 'Автозапис', пропускаем отправку.");
-        return null; // Возвращаем null, чтобы sendTelegramMessageWithRetry не выполнялся
+    // Проверяем, что новый статус = "Автозапис" (ID=1642511)
+    if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) {
+        console.log("❌ Статус изменён, но не на 'Автозапис'. Пропускаем.");
+        return null;
     }
 
-    // Формируем сообщение ТОЛЬКО для статуса "Автозапис"
+    // Формируем сообщение только для перевода в "Автозапис"
     const orderName = escapeMarkdown(data.metadata.order?.name || "Без названия");
     const clientName = escapeMarkdown(data.metadata.client?.fullname || "Не указан");
     const assetName = escapeMarkdown(data.metadata.asset?.name || "Не указана");
     const employeeName = escapeMarkdown(data.employee?.full_name || "Неизвестно");
 
-    return `🆕 *Автозапись #${data.metadata.order.id}*\n` +
+    return `🔄 *Автозапись #${data.metadata.order.id}*\n` +
            `📝 Название: \`${orderName}\`\n` +
            `👤 Клиент: ${clientName}\n` +
            `📱 Марка авто: ${assetName}\n` +
            `👨‍💼 Сотрудник: ${employeeName}`;
 },
-  "Order.Status.Changed": async (data) => {
-    // Получим названия статусов (в реальном приложении использовать API Remonline)
-    const oldStatusName = await getStatusName(data.metadata.old.id);
-    const newStatusName = await getStatusName(data.metadata.new.id);
-
-    return (
-      `🔄 *Изменен статус заказа #${data.metadata.order.id}*\n` +
-      `📝 Название: \`${data.metadata.order.name}\`\n` +
-      `📊 Статус: ${oldStatusName} ➡️ ${newStatusName}\n` +
-      `👨‍💼 Сотрудник: ${data.employee?.full_name || "Неизвестно"}`
-    );
-  },
   "Order.Deleted": (data) => {
     return (
       `🗑️ *Удален заказ #${data.metadata.order.id}*\n` +
@@ -279,3 +272,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
+
+
