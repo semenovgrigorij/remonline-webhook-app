@@ -55,7 +55,7 @@ const eventHandlers = {
     return `🔄 *Автозапис із сайту #${data.metadata.order.id}*\n` +
            `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
            `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
-           `🚗 Марка авто: ${cachedData.asset?.name?.trim() || "Не вказано"}`;
+           `🚗 Марка авто: ${cachedData.asset?.brand?.trim() || "Не вказано"}`;
 },
 /* "Order.Status.Changed": async (data) => {
     const newStatusId = data.metadata.new.id;
@@ -119,7 +119,7 @@ app.get("/send-test", async (req, res) => {
         status: { id: 1642511 }, // ID статуса "Автозапис"
         order: { id: 999, name: "Тестовый заказ" },
         client: { fullname: "Иван Иванов" },
-        asset: { name: "Toyota Camry" },
+        asset: { brand: "Toyota Camry" },
         employee: { full_name: "Менеджер Петров" }
       }
     };
