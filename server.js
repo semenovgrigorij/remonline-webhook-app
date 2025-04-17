@@ -116,7 +116,7 @@ app.get("/send-test", async (req, res) => {
     const testData = {
       event_name: "Order.Created",
       metadata: {
-        status: { id: 1642511 }, // ID статуса "Автозапис"
+        // status: { id: 1642511 },
         order: { id: 999, name: "Тестовый заказ" },
         client: { fullname: "Иван Иванов" },
         asset: { brand: "Toyota Camry" },
@@ -128,9 +128,9 @@ app.get("/send-test", async (req, res) => {
     const handler = eventHandlers["Order.Created"];
     const message = await handler(testData);
 
-    if (!message) {
-      return res.status(200).send("Тестовое сообщение не отправлено: статус не 'Автозапис'");
-    }
+    // if (!message) {
+    //   return res.status(200).send("Тестовое сообщение не отправлено: статус не 'Автозапис'");
+    // }
 
     await sendTelegramMessageWithRetry(message);
     res.send("✅ Тестовое сообщение отправлено: " + message);
