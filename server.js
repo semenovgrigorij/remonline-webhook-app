@@ -47,7 +47,7 @@ const eventHandlers = {
     });
     return null; // Пропускаем уведомление при создании
 },
-"Order.Status.Changed": async (data) => {
+/* "Order.Status.Changed": async (data) => {
     if (data.metadata.new.id !== AUTO_APPOINTMENT_STATUS_ID) return null;
     
     const cachedData = orderCache.get(data.metadata.order.id) || {};
@@ -56,7 +56,7 @@ const eventHandlers = {
            `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
            `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
            `🚗 Марка авто: ${cachedData.asset?.brand?.trim() || "Не вказано"}`;
-},
+}, */
 /* "Order.Status.Changed": async (data) => {
     const newStatusId = data.metadata.new.id;
     if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
