@@ -167,14 +167,14 @@ async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
     disable_web_page_preview: true,
   };
 
-  console.log("Отправка в Telegram с параметрами:", {
-    url,
-    chat_id: TELEGRAM_CHAT_ID,
-    textLength: text.length,
-    botToken: TELEGRAM_TOKEN
-      ? `${TELEGRAM_TOKEN.substring(0, 5)}...`
-      : "отсутствует",
-  });
+  // console.log("Отправка в Telegram с параметрами:", {
+  //   url,
+  //   chat_id: TELEGRAM_CHAT_ID,
+  //   textLength: text.length,
+  //   botToken: TELEGRAM_TOKEN
+  //     ? `${TELEGRAM_TOKEN.substring(0, 5)}...`
+  //     : "отсутствует",
+  // });
 
   let lastError;
 
