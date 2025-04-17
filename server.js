@@ -87,18 +87,19 @@ app.post("/webhook", async (req, res) => {
 
     const handler = eventHandlers[data.event_name];
     let message;
+    message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
 
-    if (handler) {
-      message = await handler(data);
+    // if (handler) {
+    //   message = await handler(data);
       
-      // Если handler вернул null (статус не "Автозапис") — пропускаем отправку
-      if (message === null) {
-        console.log("⏩ Пропуск отправки: статус не 'Автозапис'");
-        return res.status(200).send("OK (не автозапись)");
-      }
-    } else {
-      message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
-    }
+    //   // Если handler вернул null (статус не "Автозапис") — пропускаем отправку
+    //   if (message === null) {
+    //     console.log("⏩ Пропуск отправки: статус не 'Автозапис'");
+    //     return res.status(200).send("OK (не автозапись)");
+    //   }
+    // } else {
+    //   message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
+    // }
 
     await sendTelegramMessageWithRetry(message);
     res.status(200).send("OK");
