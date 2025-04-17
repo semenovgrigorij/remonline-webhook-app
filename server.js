@@ -116,7 +116,7 @@ app.get("/send-test", async (req, res) => {
     const testData = {
       event_name: "Order.Created",
       metadata: {
-        // status: { id: 1642511 },
+        status: { id: 1642511 },
         order: { id: 999, name: "Тестовый заказ" },
         client: { fullname: "Иван Иванов" },
         asset: { brand: "Toyota Camry" },
