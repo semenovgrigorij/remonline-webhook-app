@@ -30,12 +30,6 @@ app.get("/", (req, res) => {
   res.status(200).send("✅ Вебхук для Remonline работает!");
 });
 
-// Хранилище последних запросов
-let lastRequests = [];
-
-app.get("/last-requests", (req, res) => {
-  res.json(lastRequests.slice(-5));
-});
 
 // Объект для обработки разных типов событий
 const eventHandlers = {
@@ -47,7 +41,7 @@ const eventHandlers = {
     });
     return null; // Пропускаем уведомление при создании
 },
-/* "Order.Status.Changed": async (data) => {
+"Order.Status.Changed": async (data) => {
     if (data.metadata.new.id !== AUTO_APPOINTMENT_STATUS_ID) return null;
     
     const cachedData = orderCache.get(data.metadata.order.id) || {};
@@ -56,7 +50,7 @@ const eventHandlers = {
            `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
            `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
            `🚗 Марка авто: ${cachedData.asset?.brand?.trim() || "Не вказано"}`;
-}, */
+},
 /* "Order.Status.Changed": async (data) => {
     const newStatusId = data.metadata.new.id;
     if (newStatusId !== AUTO_APPOINTMENT_STATUS_ID) return null;
