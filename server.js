@@ -233,7 +233,8 @@ app.get("/send-test", async (req, res) => {
 // Тестовый эндпоинт для проверки интеграции с Amelia
 app.get("/test-amelia-integration", async (req, res) => {
   try {
-    const remonlineOrderId = req.query.order_id;
+    // const remonlineOrderId = req.query.order_id;
+    const remonlineOrderId = 53033169;
     if (!remonlineOrderId) {
       return res.status(400).send("Требуется параметр order_id");
     }
