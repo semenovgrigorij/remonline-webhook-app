@@ -69,6 +69,12 @@ const eventHandlers = {
     const oldStatusId = data.metadata.old.id;
     
     console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} -> ${newStatusId}`);
+    console.log(`⚡ Изменение статуса заказа #${orderId}:`);
+    console.log(`   Старый статус: ${oldStatusId} (${data.metadata.old.name})`);
+    console.log(`   Новый статус: ${newStatusId} (${data.metadata.new.name})`);
+    console.log(`   Ожидаемый AUTO_APPOINTMENT_STATUS_ID: ${AUTO_APPOINTMENT_STATUS_ID}`);
+    console.log(`   Ожидаемый IN_PROGRESS_STATUS_ID: ${IN_PROGRESS_STATUS_ID}`);
+    console.log(`   Условие выполнено: ${oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID}`);
     
     // Если статус меняется с "Автозапис" на "В работе", синхронизируем с Amelia
     if (oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID) {
