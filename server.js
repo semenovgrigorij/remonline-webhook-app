@@ -69,37 +69,18 @@ const eventHandlers = {
     const oldStatusId = data.metadata.old.id;
     
     console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} -> ${newStatusId}`);
-    console.log(`⚡ Изменение статуса заказа #${orderId}:`);
-    console.log(`   Старый статус: ${oldStatusId} (${data.metadata.old.name})`);
-    console.log(`   Новый статус: ${newStatusId} (${data.metadata.new.name})`);
-    console.log(`   Ожидаемый AUTO_APPOINTMENT_STATUS_ID: ${AUTO_APPOINTMENT_STATUS_ID}`);
-    console.log(`   Ожидаемый IN_PROGRESS_STATUS_ID: ${IN_PROGRESS_STATUS_ID}`);
-    console.log(`   Условие выполнено: ${oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID}`);
     
     
     // Если статус меняется с "Автозапис" на "В работе", синхронизируем с Amelia
-    if (oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID) {
-      console.log(`✅ Условие выполнено! Синхронизируем статус с Amelia`);
       await syncStatusWithAmelia(orderId, newStatusId);
-      
-      return `🔄 *Заказ #${data.metadata.order.id} перешел в работу*\n` +
-             `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
-             `👨‍💼 Изменил: ${data.employee?.full_name || "Неизвестно"}`;
+    
+    if (newStatusId === IN_PROGRESS_STATUS_ID) {
+      return `🔄 *Заказ #${orderId} перешел в работу*`;
+    } else if (newStatusId === AUTO_APPOINTMENT_STATUS_ID) {
+      return `🔄 *Заказ #${orderId} в статусе "Автозапис"*`;
     }
     
-    // Если есть другие статусы для синхронизации, добавьте их здесь
-    
-    // Для обычного уведомления в Telegram (если нужно)
-    if (newStatusId === AUTO_APPOINTMENT_STATUS_ID) {
-      const cachedData = orderCache.get(data.metadata.order.id) || {};
-      
-      return `🔄 *Автозапис із сайту #${data.metadata.order.id}*\n` +
-             `📝 Номер документа: \`${data.metadata.order.name}\`\n` +
-             `👤 Клієнт: ${cachedData.client?.fullname || "Не вказано"}\n` +
-             `🚗 Марка авто: ${cachedData.asset?.brand?.trim() || "Не вказано"}`;
-    }
-    
-    return null; // Пропускаем уведомление для других статусов
+    return `🔄 *Статус заказа #${orderId} изменен*`;
   },
   "Order.Deleted": (data) => {
     return (
