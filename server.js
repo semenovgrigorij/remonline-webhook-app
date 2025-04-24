@@ -9,7 +9,7 @@ const statusNames = {
   '1342663': 'Автозапис',
   '1342661': 'В работе'
 };
-console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} (${statusNames[oldStatusId] || 'Неизвестный'}) -> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})`);
+
 
 // Конфигурация
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
@@ -74,8 +74,7 @@ const eventHandlers = {
     const newStatusId = data.metadata.new.id;
     const oldStatusId = data.metadata.old.id;
     
-    console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} -> ${newStatusId}`);
-    
+    console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} (${statusNames[oldStatusId] || 'Неизвестный'}) -> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})`);
     
     // Если статус меняется с "Автозапис" на "В работе", синхронизируем с Amelia
       await syncStatusWithAmelia(orderId, newStatusId);
