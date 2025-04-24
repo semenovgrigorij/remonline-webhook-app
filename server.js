@@ -11,8 +11,8 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
 const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
 const IN_PROGRESS_STATUS_ID = 1642512; // ID статуса "В работе" (укажите правильный ID)
-const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://ваш-сайт.com"; // URL вашего WordPress сайта
-const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "ваш_секретный_ключ"; // Секретный ключ для запросов к WordPress
+const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services/"; // URL вашего WordPress сайта
+const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8"; // Секретный ключ для запросов к WordPress
 
 const app = express();
 
