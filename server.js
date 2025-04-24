@@ -4,6 +4,12 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 const crypto = require("crypto");
 require("dotenv").config();
+const statusNames = {
+  '1642511': 'Неизвестный (1642511)',
+  '1342663': 'Автозапис',
+  '1342661': 'В работе'
+};
+console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} (${statusNames[oldStatusId] || 'Неизвестный'}) -> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})`);
 
 // Конфигурация
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
