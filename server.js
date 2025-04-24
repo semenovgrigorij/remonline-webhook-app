@@ -9,8 +9,8 @@ require("dotenv").config();
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
-const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
-const IN_PROGRESS_STATUS_ID = 1642512; // ID статуса "В работе" (укажите правильный ID)
+const AUTO_APPOINTMENT_STATUS_ID = 1342663; // ID статуса "Автозапис"
+const IN_PROGRESS_STATUS_ID = 1342661; // ID статуса "В работе" (укажите правильный ID)
 const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; // URL вашего WordPress сайта
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8"; // Секретный ключ для запросов к WordPress
 
@@ -76,8 +76,10 @@ const eventHandlers = {
     console.log(`   Ожидаемый IN_PROGRESS_STATUS_ID: ${IN_PROGRESS_STATUS_ID}`);
     console.log(`   Условие выполнено: ${oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID}`);
     
+    
     // Если статус меняется с "Автозапис" на "В работе", синхронизируем с Amelia
     if (oldStatusId === AUTO_APPOINTMENT_STATUS_ID && newStatusId === IN_PROGRESS_STATUS_ID) {
+      console.log(`✅ Условие выполнено! Синхронизируем статус с Amelia`);
       await syncStatusWithAmelia(orderId, newStatusId);
       
       return `🔄 *Заказ #${data.metadata.order.id} перешел в работу*\n` +
