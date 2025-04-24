@@ -36,9 +36,16 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
   try {
     console.log(`🔄 Синхронизация заказа #${orderId} со статусом ${newStatusId} с Amelia`);
     
-    // ПРАВИЛЬНО - используем глобальные константы напрямую
-    console.log(`Отправка запроса на ${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`);
+    // Сначала проверяем, есть ли такая запись в Amelia
+    const checkResponse = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment?external_id=${orderId}&secret=${WORDPRESS_SECRET}`);
     
+    // Если записи нет, выводим сообщение и пропускаем обновление
+    if (!checkResponse.data.exists) {
+      console.log(`⚠️ Запись для заказа #${orderId} не найдена в Amelia. Синхронизация пропущена.`);
+      return false;
+    }
+    
+    // Если запись существует, обновляем статус
     const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`, {
       orderId: orderId,
       newStatusId: newStatusId,
@@ -47,7 +54,6 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
       headers: { 'Content-Type': 'application/json' },
       timeout: 10000
     });
-    
     console.log(`✅ Статус успешно обновлен в Amelia`, response.data);
     return true;
   } catch (error) {
