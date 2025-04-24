@@ -104,6 +104,8 @@ const eventHandlers = {
 
 // Вебхук от Remonline
 app.post("/webhook", async (req, res) => {
+  console.log("⭐ WEBHOOK RECEIVED ⭐");
+  console.log("Headers:", JSON.stringify(req.headers));
   console.log("Raw webhook data:", JSON.stringify(req.body, null, 2));
   try {
     const xSignature = req.headers['x-signature'] || req.body['x-signature'];
@@ -138,6 +140,48 @@ app.post("/webhook", async (req, res) => {
   } catch (error) {
     console.error("❌ Ошибка обработки запроса:", error);
     res.status(200).send("Error handled"); // Отвечаем 200 OK, чтобы Remonline не повторял запрос
+  }
+});
+
+// Тестовый эндпоинт для проверки обработки Order.Status.Changed
+app.get("/test-event", async (req, res) => {
+  try {
+    // Создаем тестовое событие изменения статуса
+    const testEvent = {
+      id: "test-event-" + Date.now(),
+      event_name: "Order.Status.Changed",
+      metadata: {
+        order: {
+          id: req.query.order_id || "53053147",
+          name: "TEST_ORDER"
+        },
+        old: {
+          id: 1642511, // Автозапис
+          name: "Автозапис"
+        },
+        new: {
+          id: 1642512, // В работе
+          name: "В работе"
+        }
+      },
+      employee: {
+        id: 268918,
+        full_name: "Тестовый пользователь"
+      }
+    };
+    
+    // Обрабатываем событие
+    console.log("🔥 Обработка тестового события Order.Status.Changed");
+    const handler = eventHandlers["Order.Status.Changed"];
+    if (handler) {
+      const message = await handler(testEvent);
+      res.send(`✅ Тестовое событие обработано успешно.\nСообщение: ${message || "Без уведомления"}`);
+    } else {
+      res.status(500).send("❌ Обработчик Order.Status.Changed не найден");
+    }
+  } catch (error) {
+    console.error("❌ Ошибка при обработке тестового события:", error);
+    res.status(500).send("Ошибка: " + error.message);
   }
 });
 
