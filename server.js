@@ -11,7 +11,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
 const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
 const IN_PROGRESS_STATUS_ID = 1642512; // ID статуса "В работе" (укажите правильный ID)
-const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services/"; // URL вашего WordPress сайта
+const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; // URL вашего WordPress сайта
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8"; // Секретный ключ для запросов к WordPress
 
 const app = express();
@@ -30,12 +30,13 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
   try {
     console.log(`🔄 Синхронизация заказа #${orderId} со статусом ${newStatusId} с Amelia`);
     
-    // Здесь мы отправляем запрос к вашему WordPress сайту для обновления статуса в Amelia
-    // Предполагается, что вы создадите эндпоинт для приема этих запросов в вашем плагине
+    // ПРАВИЛЬНО - используем глобальные константы напрямую
+    console.log(`Отправка запроса на ${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`);
+    
     const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`, {
       orderId: orderId,
       newStatusId: newStatusId,
-      secret: WORDPRESS_SECRET // Для безопасности запросов
+      secret: WORDPRESS_SECRET
     }, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 10000
@@ -52,7 +53,6 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
     return false;
   }
 }
-
 // Объект для обработки разных типов событий
 const eventHandlers = {
   "Order.Created": async (data) => {
@@ -106,15 +106,14 @@ const eventHandlers = {
 app.post("/webhook", async (req, res) => {
   console.log("Raw webhook data:", JSON.stringify(req.body, null, 2));
   try {
-    // Проверка секретного ключа (если настроен)
-    if (WEBHOOK_SECRET) {
-      const receivedSecret = req.headers['x-remonline-secret'] || req.query.secret;
-      if (receivedSecret !== WEBHOOK_SECRET) {
-        console.warn("⚠️ Неверный секретный ключ вебхука");
-        return res.status(403).send("Неверный секретный ключ");
-      }
+    const xSignature = req.headers['x-signature'] || req.body['x-signature'];
+    if (xSignature) {
+      console.log(`Получена подпись: ${xSignature}`);
+      // Можно реализовать проверку подписи, если у вас есть документация по алгоритму
+    } else {
+      console.log(`Предупреждение: запрос без подписи или ключа`);
     }
-    
+
     const data = req.body;
     console.log("🔥 Получен запрос от Remonline:", data.event_name);
 
