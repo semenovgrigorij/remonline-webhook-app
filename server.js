@@ -135,7 +135,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     // Если нужна отправка в Telegram
-    // await sendTelegramMessageWithRetry(message);
+    await sendTelegramMessageWithRetry(message);
     res.status(200).send("OK");
   } catch (error) {
     console.error("❌ Ошибка обработки запроса:", error);
