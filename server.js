@@ -135,7 +135,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     // Если нужна отправка в Telegram
-    await sendTelegramMessageWithRetry(message);
+    // await sendTelegramMessageWithRetry(message);
     res.status(200).send("OK");
   } catch (error) {
     console.error("❌ Ошибка обработки запроса:", error);
@@ -204,7 +204,7 @@ app.get("/test-sync", async (req, res) => {
 });
 
 // Отправка в Telegram с повторными попытками
-async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
+/* async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   const payload = {
     chat_id: TELEGRAM_CHAT_ID,
@@ -219,7 +219,7 @@ async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
     try {
       const response = await axios.post(url, payload, {
         headers: { "Content-Type": "application/json" },
-        timeout: 10000, // Увеличенный таймаут
+        timeout: 10000, 
       });
 
       console.log(`✅ Сообщение Telegram отправлено (попытка ${attempt}):`);
@@ -234,35 +234,26 @@ async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
           message: error.message,
         }
       );
-
-      // Обработка ошибок Telegram API
       if (error.response?.status === 429) {
-        // Too Many Requests - увеличиваем задержку
         const retryAfter = error.response.data?.parameters?.retry_after || 5;
         console.log(`⏳ Превышен лимит запросов, ожидаем ${retryAfter} секунд`);
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
       } else if (error.response?.status === 400) {
-        // Плохой запрос - проверяем ошибку
         if (error.response.data?.description?.includes("markdown")) {
-          // Проблема с Markdown форматированием - повторяем без разметки
           console.log("⚠️ Проблема с Markdown, отправляем без форматирования");
           payload.parse_mode = "";
         }
       } else if (attempt < retries) {
-        // Ожидаем перед следующей попыткой
         console.log(`⏳ Повторная попытка через ${delay / 1000} секунд...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        // Увеличиваем задержку для каждой следующей попытки
         delay = delay * 1.5;
       }
     }
   }
-
-  // Если все попытки не удались
   throw new Error(
     `Не удалось отправить сообщение после ${retries} попыток: ${lastError.message}`
   );
-}
+} */
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
