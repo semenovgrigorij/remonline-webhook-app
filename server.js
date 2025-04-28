@@ -2,7 +2,7 @@ const orderCache = new Map(); // Хранит данные заказов
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const crypto = require("crypto");
+// const crypto = require("crypto");
 require("dotenv").config();
 const statusNames = {
   '1642511': 'Неизвестный (1642511)',
@@ -12,9 +12,9 @@ const statusNames = {
 
 
 // Конфигурация
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
+// const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
+// const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
+// const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
 const AUTO_APPOINTMENT_STATUS_ID = 1342663; // ID статуса "Автозапис"
 const IN_PROGRESS_STATUS_ID = 1342661; // ID статуса "В работе" (укажите правильный ID)
 const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; // URL вашего WordPress сайта
