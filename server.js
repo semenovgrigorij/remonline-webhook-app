@@ -5,9 +5,9 @@ const axios = require("axios");
 // const crypto = require("crypto");
 require("dotenv").config();
 const statusNames = {
-  '1642511': 'Неизвестный (1642511)',
-  '1342663': 'Автозапис',
-  '1342661': 'В работе'
+  '1642511': 'Автозапис',
+  '1342663': 'Новий',
+  '1342652': 'Відмова'
 };
 
 
@@ -15,9 +15,9 @@ const statusNames = {
 // const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
 // const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 // const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
-const AUTO_APPOINTMENT_STATUS_ID = 1342663; // ID статуса "Автозапис"
-const IN_PROGRESS_STATUS_ID = 1342661; // ID статуса "В работе" (укажите правильный ID)
-const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; // URL вашего WordPress сайта
+const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
+const IN_PROGRESS_STATUS_ID = 1342663; // ID статуса "Новый"
+const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; 
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8"; // Секретный ключ для запросов к WordPress
 
 const app = express();
@@ -111,7 +111,7 @@ app.post("/webhook", async (req, res) => {
     const xSignature = req.headers['x-signature'] || req.body['x-signature'];
     if (xSignature) {
       console.log(`Получена подпись: ${xSignature}`);
-      // Можно реализовать проверку подписи, если у вас есть документация по алгоритму
+      
     } else {
       console.log(`Предупреждение: запрос без подписи или ключа`);
     }
@@ -160,8 +160,8 @@ app.get("/test-event", async (req, res) => {
           name: "Автозапис"
         },
         new: {
-          id: 1642512, // В работе
-          name: "В работе"
+          id: 1342663, // Новий заказ
+          name: "Новий"
         }
       },
       employee: {
