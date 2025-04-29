@@ -110,36 +110,95 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
 }
 
 // Функция для синхронизации даты/времени с Amelia
+// Функция для синхронизации даты/времени с Amelia
 async function syncDateTimeWithAmelia(orderId, scheduledFor) {
   try {
-    console.log(`🔄 Синхронизация времени заказа #${orderId} (запланирован на ${new Date(scheduledFor).toLocaleString()}) с Amelia`);
+    // Валидация входных параметров
+    if (!orderId) {
+      console.error(`❌ Ошибка: пустой ID заказа для синхронизации времени`);
+      return false;
+    }
+    
+    // Валидация времени
+    if (!scheduledFor || isNaN(Number(scheduledFor))) {
+      console.error(`❌ Ошибка: некорректное время для синхронизации (${scheduledFor})`);
+      return false;
+    }
+    
+    // Преобразуем к строке и числу соответственно
+    const orderIdStr = String(orderId);
+    const scheduledForNum = Number(scheduledFor);
+    
+    // Проверка на разумное значение времени (между 2020 и 2030 годами в миллисекундах)
+    const minTime = new Date('2020-01-01').getTime();
+    const maxTime = new Date('2030-12-31').getTime();
+    
+    if (scheduledForNum < minTime || scheduledForNum > maxTime) {
+      console.error(`❌ Подозрительное значение времени: ${scheduledForNum} (${new Date(scheduledForNum).toISOString()})`);
+      return false;
+    }
+    
+    console.log(`🔄 Синхронизация времени заказа #${orderIdStr} (запланирован на ${new Date(scheduledForNum).toLocaleString()}) с Amelia`);
     
     // Сначала проверяем, есть ли такая запись в Amelia
-    const checkResponse = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment?external_id=${orderId}&secret=${WORDPRESS_SECRET}`);
-    
-    // Если записи нет, выводим сообщение и пропускаем обновление
-    if (!checkResponse.data.exists) {
-      console.log(`⚠️ Запись для заказа #${orderId} не найдена в Amelia. Синхронизация пропущена.`);
+    try {
+      const checkResponse = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`, {
+        params: {
+          external_id: orderIdStr,
+          secret: WORDPRESS_SECRET
+        },
+        timeout: 10000
+      });
+      
+      // Проверяем ответ от API
+      if (!checkResponse.data || typeof checkResponse.data.exists !== 'boolean') {
+        console.error(`❌ Неверный формат ответа от API проверки записи:`, checkResponse.data);
+        return false;
+      }
+      
+      // Если записи нет, выводим сообщение и пропускаем обновление
+      if (!checkResponse.data.exists) {
+        console.log(`⚠️ Запись для заказа #${orderIdStr} не найдена в Amelia. Синхронизация времени пропущена.`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ Ошибка при проверке записи в Amelia:`, error.message);
+      console.error(`Детали:`, {
+        status: error.response?.status,
+        data: error.response?.data
+      });
       return false;
     }
     
     // Если запись существует, обновляем дату/время
-    const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-datetime`, {
-      orderId: orderId,
-      scheduledFor: scheduledFor,
-      secret: WORDPRESS_SECRET
-    }, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 10000
-    });
-    console.log(`✅ Время успешно обновлено в Amelia`, response.data);
-    return true;
+    try {
+      const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-datetime`, {
+        orderId: orderIdStr,
+        scheduledFor: scheduledForNum,
+        secret: WORDPRESS_SECRET
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000
+      });
+      
+      // Проверяем ответ от API
+      if (!response.data || response.data.success !== true) {
+        console.error(`❌ Неверный формат ответа при обновлении времени:`, response.data);
+        return false;
+      }
+      
+      console.log(`✅ Время успешно обновлено в Amelia`, response.data);
+      return true;
+    } catch (error) {
+      console.error(`❌ Ошибка при обновлении времени в Amelia:`, error.message);
+      console.error(`Детали:`, {
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      return false;
+    }
   } catch (error) {
-    console.error(`❌ Ошибка при обновлении времени в Amelia:`, error.message);
-    console.error(`Детали:`, {
-      status: error.response?.status,
-      data: error.response?.data
-    });
+    console.error(`❌ Неожиданная ошибка при синхронизации времени:`, error);
     return false;
   }
 }
