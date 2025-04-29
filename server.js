@@ -22,6 +22,35 @@ const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8";
 
 const app = express();
 
+/**
+ * Получает актуальный токен Remonline из WordPress
+ */
+async function getTokenFromWordPress() {
+  try {
+    console.log("🔄 Запрос актуального токена из WordPress");
+    
+    const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/get-token`, {
+      params: {
+        secret: WORDPRESS_SECRET
+      },
+      timeout: 10000
+    });
+    
+    if (response.status === 200 && response.data && response.data.token) {
+      console.log("✅ Получен актуальный токен Remonline из WordPress");
+      return response.data.token;
+    } else {
+      console.error("❌ Ошибка при получении токена: неверный формат ответа");
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Ошибка при получении токена из WordPress:", error.message);
+    return null;
+  }
+}
+
+
+
 // Поддержка JSON и x-www-form-urlencoded
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -30,6 +59,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get("/", (req, res) => {
   res.status(200).send("✅ Вебхук для Remonline работает!");
 });
+
 
 // Функция для синхронизации статуса с Amelia
 async function syncStatusWithAmelia(orderId, newStatusId) {
@@ -209,11 +239,12 @@ async function syncDateTimeWithAmelia(orderId, scheduledFor) {
  * @param {string} token API токен Remonline
  * @returns {number|null} Время в миллисекундах или null
  */
-async function getOrderScheduledTime(orderId, token) {
+async function getOrderScheduledTime(orderId, providedToken = null) {
   try {
+    const token = providedToken || await getTokenFromWordPress();
     // Проверка параметров
-    if (!orderId || !token) {
-      console.error(`❌ Не указан orderId или token для получения данных заказа`);
+    if (!token) {
+      console.error("❌ Не удалось получить токен для запроса к Remonline API");
       return null;
     }
 
@@ -248,10 +279,18 @@ async function getOrderScheduledTime(orderId, token) {
     return orderData.scheduled_for;
 
   } catch (error) {
-    console.error(`❌ Ошибка при получении данных заказа #${orderId}:`, error.message);
-    if (error.response) {
-      console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+    // Если получили ошибку авторизации даже с токеном из WordPress
+    if (error.response && error.response.status === 401) {
+      console.error("❌ Токен из WordPress недействителен");
+      // В этом случае можно попробовать аварийное обновление
+      if (!providedToken) { // Избегаем рекурсии
+        const emergencyToken = await updateRemonlineToken();
+        if (emergencyToken) {
+          return getOrderScheduledTime(orderId, emergencyToken);
+        }
+      }
     }
+    console.error(`❌ Ошибка при получении данных заказа:`, error.message);
     return null;
   }
 }
@@ -277,12 +316,18 @@ const eventHandlers = {
     
     const orderId = String(data.metadata.order.id);
     const newStatusId = String(data.metadata.new.id);
-    const oldStatusId = data.metadata.old ? String(data.metadata.old.id) : 'неизвестный';
+    
+        // Получаем актуальный токен
+        const token = await getApiToken();
+        if (!token) {
+          console.error("❌ Не удалось получить токен для API Remonline");
+          return "⚠️ *Ошибка обработки изменения статуса заказа: проблема с API токеном*";
+        }
     
     console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} (${statusNames[oldStatusId] || 'Неизвестный'}) -> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})`);
     
     // Получаем текущее запланированное время заказа из Remonline API
-    const scheduledTime = await getOrderScheduledTime(orderId, data.metadata.order.token || api_token);
+    const scheduledTime = await getOrderScheduledTime(orderId, token);
     
     let statusMessage = "";
     let timeUpdateResult = false;
