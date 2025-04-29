@@ -110,7 +110,7 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
 }
 
 // Функция для синхронизации даты/времени с Amelia
-// Функция для синхронизации даты/времени с Amelia
+
 async function syncDateTimeWithAmelia(orderId, scheduledFor) {
   try {
     // Валидация входных параметров
