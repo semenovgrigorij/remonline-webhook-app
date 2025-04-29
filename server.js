@@ -1,5 +1,11 @@
 const orderCache = new Map(); // Хранит данные заказов
 const express = require("express");
+// Добавьте этот код после объявления приложения Express
+console.log("🔧 Конфигурация API:");
+console.log(`  - WORDPRESS_URL: ${WORDPRESS_URL}`);
+console.log(`  - API Token: ${api_token ? 'установлен' : 'не установлен'}`);
+console.log(`  - API Key: ${process.env.REMONLINE_API_KEY ? 'установлен' : 'не установлен'}`);
+console.log(`  - Webhook Secret: ${WORDPRESS_SECRET ? 'установлен' : 'не установлен'}`);
 const bodyParser = require("body-parser");
 const axios = require("axios");
 // const crypto = require("crypto");
@@ -9,7 +15,8 @@ const statusNames = {
   '1342663': 'Новий',
   '1342652': 'Відмова'
 };
-
+let api_token = process.env.REMONLINE_API_TOKEN || '';
+let token_expiry = 0;
 
 // Конфигурация
 // const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
@@ -17,10 +24,56 @@ const statusNames = {
 // const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
 const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
 const IN_PROGRESS_STATUS_ID = 1342663; // ID статуса "Новый"
-const WORDPRESS_URL = process.env.WORDPRESS_URL || "https://www.gcar.services"; 
-const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || "dloc9vLhLZjLUjEgJru8"; // Секретный ключ для запросов к WordPress
+const WORDPRESS_URL = process.env.WORDPRESS_URL || ''; 
+const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || ''; // Секретный ключ для запросов к WordPress
 
 const app = express();
+
+/**
+ * Обновляет токен Remonline API через локальный ключ API
+ * @returns {string|null} Новый токен или null при ошибке
+ */
+async function updateRemonlineToken() {
+  try {
+    const api_key = process.env.REMONLINE_API_KEY;
+    if (!api_key) {
+      console.error("❌ API ключ Remonline не настроен в переменных окружения");
+      return null;
+    }
+
+    console.log("🔄 Запрос на обновление токена Remonline через API");
+
+    const response = await axios.post("https://api.remonline.app/token/new", {
+      api_key: api_key
+    }, {
+      headers: {
+        'accept': 'application/json',
+        'content-type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    if (response.status === 200 && response.data && response.data.token) {
+      const newToken = response.data.token;
+      console.log(`✅ Токен Remonline успешно обновлен (${newToken.substring(0, 5)}...)`);
+      
+      // Обновляем глобальные переменные
+      api_token = newToken;
+      token_expiry = Math.floor(Date.now() / 1000) + 24*3600;
+      
+      return newToken;
+    } else {
+      console.error("❌ Ошибка при обновлении токена: неверный формат ответа");
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Ошибка при обновлении токена:", error.message);
+    if (error.response) {
+      console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+    }
+    return null;
+  }
+}
 
 /**
  * Получает актуальный токен Remonline из WordPress
@@ -49,6 +102,59 @@ async function getTokenFromWordPress() {
   }
 }
 
+/**
+ * Получает актуальный API токен Remonline
+ * @returns {string|null} API токен или null при ошибке
+ */
+async function getApiToken() {
+  try {
+    // Проверяем, есть ли у нас действительный кэшированный токен
+    const now = Math.floor(Date.now() / 1000);
+    if (api_token && token_expiry > now + 300) { // действителен еще минимум 5 минут
+      console.log(`📋 Используем кэшированный токен Remonline (${api_token.substring(0, 5)}...)`);
+      return api_token;
+    }
+    
+    // Пытаемся получить токен из WordPress
+    console.log(`🔄 Запрос токена из WordPress`);
+    
+    try {
+      const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/get-token`, {
+        params: {
+          secret: WORDPRESS_SECRET
+        },
+        timeout: 10000
+      });
+      
+      if (response.status === 200 && response.data && response.data.token) {
+        api_token = response.data.token;
+        token_expiry = response.data.expires || (now + 24*3600);
+        console.log(`✅ Получен токен из WordPress (${api_token.substring(0, 5)}...), действителен до ${new Date(token_expiry * 1000).toLocaleString()}`);
+        return api_token;
+      }
+    } catch (wpError) {
+      console.error(`⚠️ Не удалось получить токен из WordPress:`, wpError.message);
+      // Продолжаем выполнение и попробуем обновить токен локально
+    }
+    
+    // Если не удалось получить из WordPress, обновляем локально
+    console.log(`🔄 Локальное обновление токена Remonline`);
+    const newToken = await updateRemonlineToken();
+    
+    if (newToken) {
+      api_token = newToken;
+      token_expiry = now + 24*3600; // Устанавливаем срок действия на 24 часа
+      console.log(`✅ Токен обновлен локально (${api_token.substring(0, 5)}...), действителен до ${new Date(token_expiry * 1000).toLocaleString()}`);
+      return api_token;
+    }
+    
+    console.error(`❌ Не удалось получить или обновить токен Remonline`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Ошибка при получении API токена:`, error.message);
+    return null;
+  }
+}
 
 
 // Поддержка JSON и x-www-form-urlencoded
@@ -236,19 +342,26 @@ async function syncDateTimeWithAmelia(orderId, scheduledFor) {
 /**
  * Получает запланированное время заказа из Remonline API
  * @param {string} orderId ID заказа в Remonline
- * @param {string} token API токен Remonline
+ * @param {string} [providedToken=null] API токен Remonline (опционально)
  * @returns {number|null} Время в миллисекундах или null
  */
 async function getOrderScheduledTime(orderId, providedToken = null) {
   try {
-    const token = providedToken || await getTokenFromWordPress();
     // Проверка параметров
-    if (!token) {
-      console.error("❌ Не удалось получить токен для запроса к Remonline API");
+    if (!orderId) {
+      console.error(`❌ Не указан orderId для получения данных заказа`);
       return null;
     }
 
-    console.log(`🔍 Получение данных заказа #${orderId} из Remonline...`);
+    // Используем предоставленный токен или пытаемся получить актуальный
+    const token = providedToken || api_token;
+    
+    if (!token) {
+      console.error(`❌ Отсутствует API токен Remonline`);
+      return null;
+    }
+
+    console.log(`🔍 Получение данных заказа #${orderId} из Remonline (токен: ${token.substring(0, 5)}...)`);
 
     // Запрос деталей заказа через Remonline API
     const response = await axios.get(`https://api.remonline.app/order/${orderId}`, {
@@ -279,18 +392,24 @@ async function getOrderScheduledTime(orderId, providedToken = null) {
     return orderData.scheduled_for;
 
   } catch (error) {
-    // Если получили ошибку авторизации даже с токеном из WordPress
+    // Обработка ошибки авторизации
     if (error.response && error.response.status === 401) {
-      console.error("❌ Токен из WordPress недействителен");
-      // В этом случае можно попробовать аварийное обновление
-      if (!providedToken) { // Избегаем рекурсии
-        const emergencyToken = await updateRemonlineToken();
-        if (emergencyToken) {
-          return getOrderScheduledTime(orderId, emergencyToken);
+      console.log("🔄 Токен недействителен, пробуем обновить и повторить запрос");
+      
+      // Обновляем токен только если не был предоставлен внешний токен
+      if (!providedToken) {
+        // Пытаемся получить токен из WordPress или обновить локально
+        const newToken = await getApiToken();
+        if (newToken) {
+          return getOrderScheduledTime(orderId, newToken);
         }
       }
     }
-    console.error(`❌ Ошибка при получении данных заказа:`, error.message);
+    
+    console.error(`❌ Ошибка при получении данных заказа #${orderId}:`, error.message);
+    if (error.response) {
+      console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+    }
     return null;
   }
 }
@@ -508,7 +627,13 @@ app.get("/test-get-order", async (req, res) => {
       return res.status(400).send("❌ Не указан параметр order_id");
     }
     
-    const scheduledTime = await getOrderScheduledTime(orderId, api_token);
+    // Получаем токен
+    const token = await getApiToken();
+    if (!token) {
+      return res.status(500).send("❌ Не удалось получить API токен Remonline");
+    }
+    
+    const scheduledTime = await getOrderScheduledTime(orderId, token);
     
     if (scheduledTime) {
       res.send(`✅ Для заказа #${orderId} получено время: ${new Date(scheduledTime).toLocaleString()}`);
