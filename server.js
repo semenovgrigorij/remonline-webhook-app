@@ -1,34 +1,45 @@
 const orderCache = new Map(); // Хранит данные заказов
 const express = require("express");
-// Добавьте этот код после объявления приложения Express
-console.log("🔧 Конфигурация API:");
-console.log(`  - WORDPRESS_URL: ${WORDPRESS_URL}`);
-console.log(`  - API Token: ${api_token ? 'установлен' : 'не установлен'}`);
-console.log(`  - API Key: ${process.env.REMONLINE_API_KEY ? 'установлен' : 'не установлен'}`);
-console.log(`  - Webhook Secret: ${WORDPRESS_SECRET ? 'установлен' : 'не установлен'}`);
 const bodyParser = require("body-parser");
 const axios = require("axios");
 // const crypto = require("crypto");
 require("dotenv").config();
-const statusNames = {
-  '1642511': 'Автозапис',
-  '1342663': 'Новий',
-  '1342652': 'Відмова'
-};
-let api_token = process.env.REMONLINE_API_TOKEN || '';
-let token_expiry = 0;
 
 // Конфигурация
 // const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
 // const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 // const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
-const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
-const IN_PROGRESS_STATUS_ID = 1342663; // ID статуса "Новый"
+
 const WORDPRESS_URL = process.env.WORDPRESS_URL || ''; 
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || ''; // Секретный ключ для запросов к WordPress
+let api_token = process.env.REMONLINE_API_TOKEN || '';
+let token_expiry = 0;
+
+// Проверка конфигурации
+if (!WORDPRESS_SECRET) {
+  console.warn("⚠️ ПРЕДУПРЕЖДЕНИЕ: WORDPRESS_SECRET не настроен. API-запросы к WordPress могут не работать.");
+}
+
+if (!process.env.REMONLINE_API_KEY) {
+  console.warn("⚠️ ПРЕДУПРЕЖДЕНИЕ: REMONLINE_API_KEY не настроен. Обновление токена не будет работать.");
+}
+
+const AUTO_APPOINTMENT_STATUS_ID = 1642511; // ID статуса "Автозапис"
+const IN_PROGRESS_STATUS_ID = 1342663; // ID статуса "Новый"
+const statusNames = {
+  '1642511': 'Автозапис',
+  '1342663': 'Новий',
+  '1342652': 'Відмова'
+};
+
 
 const app = express();
 
+console.log("🔧 Конфигурация API:");
+console.log(`  - WORDPRESS_URL: ${WORDPRESS_URL}`);
+console.log(`  - API Token: ${api_token ? 'установлен' : 'не установлен'}`);
+console.log(`  - API Key: ${process.env.REMONLINE_API_KEY ? 'установлен' : 'не установлен'}`);
+console.log(`  - Webhook Secret: ${WORDPRESS_SECRET ? 'установлен' : 'не установлен'}`);
 /**
  * Обновляет токен Remonline API через локальный ключ API
  * @returns {string|null} Новый токен или null при ошибке
