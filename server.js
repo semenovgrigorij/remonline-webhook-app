@@ -178,7 +178,12 @@ app.get("/", (req, res) => {
 });
 
 
-// Функция для синхронизации статуса с Amelia
+/**
+ * Синхронизирует статус заказа с Amelia
+ * @param {string} orderId ID заказа
+ * @param {string} newStatusId ID нового статуса
+ * @returns {Promise<boolean>} Результат синхронизации
+ */
 async function syncStatusWithAmelia(orderId, newStatusId) {
   try {
     // Валидация входных параметров
@@ -191,17 +196,24 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
     const orderIdStr = String(orderId);
     const newStatusIdStr = String(newStatusId);
     
-    console.log(`🔄 Синхронизация заказа #${orderIdStr} со статусом ${newStatusIdStr} с Amelia`);
+    console.log(`🔄 Синхронизация заказа #${orderIdStr} со статусом ${newStatusIdStr} (${statusNames[newStatusIdStr] || 'Неизвестный'}) с Amelia`);
     
     // Сначала проверяем, есть ли такая запись в Amelia
     try {
-      const checkResponse = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`, {
+      console.log(`🔍 Проверка наличия записи с externalId=${orderIdStr} в Amelia`);
+      
+      const checkUrl = `${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`;
+      console.log(`URL запроса: ${checkUrl}?external_id=${orderIdStr}`);
+      
+      const checkResponse = await axios.get(checkUrl, {
         params: {
           external_id: orderIdStr,
           secret: WORDPRESS_SECRET
         },
-        timeout: 10000
+        timeout: 15000
       });
+      
+      console.log(`✅ Получен ответ от API проверки записи: ${JSON.stringify(checkResponse.data)}`);
       
       // Проверяем ответ от API
       if (!checkResponse.data || typeof checkResponse.data.exists !== 'boolean') {
@@ -214,25 +226,33 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
         console.log(`⚠️ Запись для заказа #${orderIdStr} не найдена в Amelia. Синхронизация пропущена.`);
         return false;
       }
+      
+      console.log(`✅ Запись для заказа #${orderIdStr} найдена в Amelia`);
     } catch (error) {
       console.error(`❌ Ошибка при проверке записи в Amelia:`, error.message);
-      console.error(`Детали:`, {
-        status: error.response?.status,
-        data: error.response?.data
-      });
+      if (error.response) {
+        console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+      }
       return false;
     }
     
     // Если запись существует, обновляем статус
     try {
-      const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`, {
+      console.log(`🔄 Обновление статуса заказа #${orderIdStr} в Amelia`);
+      
+      const updateUrl = `${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-status`;
+      console.log(`URL запроса: ${updateUrl}`);
+      
+      const response = await axios.post(updateUrl, {
         orderId: orderIdStr,
         newStatusId: newStatusIdStr,
         secret: WORDPRESS_SECRET
       }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
+        timeout: 15000
       });
+      
+      console.log(`✅ Получен ответ от API обновления статуса: ${JSON.stringify(response.data)}`);
       
       // Проверяем ответ от API
       if (!response.data || response.data.success !== true) {
@@ -244,20 +264,28 @@ async function syncStatusWithAmelia(orderId, newStatusId) {
       return true;
     } catch (error) {
       console.error(`❌ Ошибка при обновлении статуса в Amelia:`, error.message);
-      console.error(`Детали:`, {
-        status: error.response?.status,
-        data: error.response?.data
-      });
+      if (error.response) {
+        console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+      } else if (error.request) {
+        console.error(`Не получен ответ. Запрос:`, error.request);
+      }
       return false;
     }
   } catch (error) {
-    console.error(`❌ Неожиданная ошибка при синхронизации статуса:`, error);
+    console.error(`❌ Неожиданная ошибка при синхронизации статуса:`, error.message);
+    if (error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     return false;
   }
 }
 
-// Функция для синхронизации даты/времени с Amelia
-
+/**
+ * Синхронизирует время заказа с Amelia
+ * @param {string} orderId ID заказа
+ * @param {number} scheduledFor Время в миллисекундах
+ * @returns {Promise<boolean>} Результат синхронизации
+ */
 async function syncDateTimeWithAmelia(orderId, scheduledFor) {
   try {
     // Валидация входных параметров
@@ -276,26 +304,24 @@ async function syncDateTimeWithAmelia(orderId, scheduledFor) {
     const orderIdStr = String(orderId);
     const scheduledForNum = Number(scheduledFor);
     
-    // Проверка на разумное значение времени (между 2020 и 2030 годами в миллисекундах)
-    const minTime = new Date('2020-01-01').getTime();
-    const maxTime = new Date('2030-12-31').getTime();
-    
-    if (scheduledForNum < minTime || scheduledForNum > maxTime) {
-      console.error(`❌ Подозрительное значение времени: ${scheduledForNum} (${new Date(scheduledForNum).toISOString()})`);
-      return false;
-    }
-    
     console.log(`🔄 Синхронизация времени заказа #${orderIdStr} (запланирован на ${new Date(scheduledForNum).toLocaleString()}) с Amelia`);
     
     // Сначала проверяем, есть ли такая запись в Amelia
     try {
-      const checkResponse = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`, {
+      console.log(`🔍 Проверка наличия записи с externalId=${orderIdStr} в Amelia`);
+      
+      const checkUrl = `${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`;
+      console.log(`URL запроса: ${checkUrl}?external_id=${orderIdStr}`);
+      
+      const checkResponse = await axios.get(checkUrl, {
         params: {
           external_id: orderIdStr,
           secret: WORDPRESS_SECRET
         },
-        timeout: 10000
+        timeout: 15000
       });
+      
+      console.log(`✅ Получен ответ от API проверки записи: ${JSON.stringify(checkResponse.data)}`);
       
       // Проверяем ответ от API
       if (!checkResponse.data || typeof checkResponse.data.exists !== 'boolean') {
@@ -308,25 +334,33 @@ async function syncDateTimeWithAmelia(orderId, scheduledFor) {
         console.log(`⚠️ Запись для заказа #${orderIdStr} не найдена в Amelia. Синхронизация времени пропущена.`);
         return false;
       }
+      
+      console.log(`✅ Запись для заказа #${orderIdStr} найдена в Amelia`);
     } catch (error) {
       console.error(`❌ Ошибка при проверке записи в Amelia:`, error.message);
-      console.error(`Детали:`, {
-        status: error.response?.status,
-        data: error.response?.data
-      });
+      if (error.response) {
+        console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+      }
       return false;
     }
     
     // Если запись существует, обновляем дату/время
     try {
-      const response = await axios.post(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-datetime`, {
+      console.log(`🔄 Обновление времени заказа #${orderIdStr} в Amelia`);
+      
+      const updateUrl = `${WORDPRESS_URL}/wp-json/amelia-remonline/v1/update-datetime`;
+      console.log(`URL запроса: ${updateUrl}`);
+      
+      const response = await axios.post(updateUrl, {
         orderId: orderIdStr,
         scheduledFor: scheduledForNum,
         secret: WORDPRESS_SECRET
       }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 10000
+        timeout: 15000
       });
+      
+      console.log(`✅ Получен ответ от API обновления времени: ${JSON.stringify(response.data)}`);
       
       // Проверяем ответ от API
       if (!response.data || response.data.success !== true) {
@@ -338,14 +372,18 @@ async function syncDateTimeWithAmelia(orderId, scheduledFor) {
       return true;
     } catch (error) {
       console.error(`❌ Ошибка при обновлении времени в Amelia:`, error.message);
-      console.error(`Детали:`, {
-        status: error.response?.status,
-        data: error.response?.data
-      });
+      if (error.response) {
+        console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+      } else if (error.request) {
+        console.error(`Не получен ответ. Запрос:`, error.request);
+      }
       return false;
     }
   } catch (error) {
-    console.error(`❌ Неожиданная ошибка при синхронизации времени:`, error);
+    console.error(`❌ Неожиданная ошибка при синхронизации времени:`, error.message);
+    if (error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     return false;
   }
 }
@@ -437,60 +475,113 @@ const eventHandlers = {
     return null; // Пропускаем уведомление при создании
   },
   "Order.Status.Changed": async (data) => {
-  try {
-    // Проверка необходимых данных
-    if (!data || !data.metadata || !data.metadata.order) {
-      console.error("❌ Ошибка: отсутствуют необходимые метаданные заказа");
-      return "⚠️ *Ошибка обработки изменения статуса заказа*";
-    }
-    
-    const orderId = String(data.metadata.order.id);
-    const newStatusId = String(data.metadata.new.id);
-    
-        // Получаем актуальный токен
-        const token = await getApiToken();
-        if (!token) {
-          console.error("❌ Не удалось получить токен для API Remonline");
-          return "⚠️ *Ошибка обработки изменения статуса заказа: проблема с API токеном*";
-        }
-    
-    console.log(`⚡ Изменение статуса заказа #${orderId}: ${oldStatusId} (${statusNames[oldStatusId] || 'Неизвестный'}) -> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})`);
-    
-    // Получаем текущее запланированное время заказа из Remonline API
-    const scheduledTime = await getOrderScheduledTime(orderId, token);
-    
-    let statusMessage = "";
-    let timeUpdateResult = false;
-    
-    // Статус изменился на "Новий" (IN_PROGRESS_STATUS_ID = 1342663)
-    if (newStatusId === String(IN_PROGRESS_STATUS_ID)) {
-      // 1. Сначала обновляем статус
-      const statusUpdateResult = await syncStatusWithAmelia(orderId, newStatusId);
-      
-      // 2. Затем, если у нас есть время - обновляем его
-      if (scheduledTime) {
-        console.log(`📅 У заказа #${orderId} установлено время: ${new Date(scheduledTime).toLocaleString()}`);
-        timeUpdateResult = await syncDateTimeWithAmelia(orderId, scheduledTime);
-        
-        if (timeUpdateResult) {
-          statusMessage = `🔄 *Заказ #${orderId} перешел в работу и обновлено время на ${new Date(scheduledTime).toLocaleString()}*`;
-        } else {
-          statusMessage = `🔄 *Заказ #${orderId} перешел в работу, но не удалось обновить время*`;
-        }
-      } else {
-        statusMessage = `🔄 *Заказ #${orderId} перешел в работу*`;
+    try {
+      // Проверяем необходимые данные
+      if (!data || !data.metadata || !data.metadata.order) {
+        console.error("❌ Ошибка: отсутствуют необходимые метаданные заказа");
+        return "⚠️ *Ошибка обработки изменения статуса заказа*";
       }
-    } else {
-      // Для других статусов просто обновляем статус
-      await syncStatusWithAmelia(orderId, newStatusId);
-      statusMessage = `🔄 *Статус заказа #${orderId} изменен на "${statusNames[newStatusId] || newStatusId}"*`;
+      
+      // Получаем и валидируем ID заказа
+      const orderId = data.metadata.order.id;
+      if (!orderId) {
+        console.error("❌ Ошибка: отсутствует ID заказа", data.metadata.order);
+        return "⚠️ *Ошибка обработки изменения статуса: отсутствует ID заказа*";
+      }
+      
+      // Получаем и валидируем статусы
+      const newStatusId = data.metadata.new && data.metadata.new.id;
+      if (!newStatusId) {
+        console.error("❌ Ошибка: отсутствует ID нового статуса", data.metadata.new);
+        return "⚠️ *Ошибка обработки изменения статуса: отсутствует новый статус*";
+      }
+      
+      const oldStatusId = data.metadata.old && data.metadata.old.id;
+      
+      // Преобразуем данные к строкам для безопасности
+      const orderIdStr = String(orderId);
+      const newStatusIdStr = String(newStatusId);
+      const oldStatusIdStr = oldStatusId ? String(oldStatusId) : 'неизвестный';
+      
+      console.log(`⚡ Изменение статуса заказа #${orderIdStr}: ${oldStatusIdStr} (${statusNames[oldStatusIdStr] || 'Неизвестный'}) -> ${newStatusIdStr} (${statusNames[newStatusIdStr] || 'Неизвестный'})`);
+      
+      // Получаем токен для API Remonline
+      const token = data.metadata.order.token || await getApiToken();
+      if (!token) {
+        console.error("❌ Ошибка: не удалось получить API токен Remonline");
+        return "⚠️ *Ошибка обработки изменения статуса: проблема с API*";
+      }
+      
+      // Получаем данные о времени из Remonline API
+      let scheduledTime = null;
+      try {
+        scheduledTime = await getOrderScheduledTime(orderIdStr, token);
+        if (scheduledTime) {
+          console.log(`📅 Запланированное время заказа #${orderIdStr}: ${new Date(scheduledTime).toLocaleString()}`);
+        } else {
+          console.log(`ℹ️ У заказа #${orderIdStr} не указано запланированное время`);
+        }
+      } catch (timeError) {
+        console.error(`❌ Ошибка при получении времени заказа: ${timeError.message}`);
+        // Продолжаем выполнение даже при ошибке получения времени
+      }
+      
+      // Обновляем статус в Amelia
+      let statusMessage = "";
+      
+      console.log(`🔄 Вызов функции syncStatusWithAmelia для заказа #${orderIdStr}, статус=${newStatusIdStr}`);
+      
+      try {
+        const statusUpdateResult = await syncStatusWithAmelia(orderIdStr, newStatusIdStr);
+        
+        if (statusUpdateResult) {
+          console.log(`✅ Статус заказа #${orderIdStr} успешно обновлен в Amelia`);
+          
+          // Если статус "Новий" (IN_PROGRESS_STATUS_ID) и у нас есть время, обновляем его тоже
+          if (newStatusIdStr === String(IN_PROGRESS_STATUS_ID) && scheduledTime) {
+            console.log(`🔄 Вызов функции syncDateTimeWithAmelia для заказа #${orderIdStr}, время=${new Date(scheduledTime).toLocaleString()}`);
+            
+            try {
+              const timeUpdateResult = await syncDateTimeWithAmelia(orderIdStr, scheduledTime);
+              
+              if (timeUpdateResult) {
+                console.log(`✅ Время заказа #${orderIdStr} успешно обновлено в Amelia`);
+                statusMessage = `🔄 *Заказ #${orderIdStr} перешел в работу и обновлено время на ${new Date(scheduledTime).toLocaleString()}*`;
+              } else {
+                console.error(`❌ Не удалось обновить время заказа #${orderIdStr} в Amelia`);
+                statusMessage = `🔄 *Заказ #${orderIdStr} перешел в работу, но не удалось обновить время*`;
+              }
+            } catch (timeUpdateError) {
+              console.error(`❌ Ошибка при обновлении времени: ${timeUpdateError.message}`);
+              statusMessage = `🔄 *Заказ #${orderIdStr} перешел в работу, но произошла ошибка при обновлении времени*`;
+            }
+          } else {
+            // Для других статусов или если нет времени
+            if (newStatusIdStr === String(IN_PROGRESS_STATUS_ID)) {
+              statusMessage = `🔄 *Заказ #${orderIdStr} перешел в работу*`;
+            } else if (newStatusIdStr === String(AUTO_APPOINTMENT_STATUS_ID)) {
+              statusMessage = `🔄 *Заказ #${orderIdStr} в статусе "Автозапис"*`;
+            } else {
+              statusMessage = `🔄 *Статус заказа #${orderIdStr} изменен на "${statusNames[newStatusIdStr] || newStatusIdStr}"*`;
+            }
+          }
+        } else {
+          console.error(`❌ Не удалось обновить статус заказа #${orderIdStr} в Amelia`);
+          statusMessage = `⚠️ *Заказ #${orderIdStr}: не удалось синхронизировать статус с Amelia*`;
+        }
+      } catch (statusUpdateError) {
+        console.error(`❌ Ошибка при обновлении статуса: ${statusUpdateError.message}`);
+        statusMessage = `⚠️ *Произошла ошибка при обновлении статуса заказа #${orderIdStr}*`;
+      }
+      
+      return statusMessage;
+    } catch (error) {
+      console.error("❌ Ошибка при обработке изменения статуса:", error.message);
+      if (error.stack) {
+        console.error("Stack trace:", error.stack);
+      }
+      return "⚠️ *Произошла ошибка при обработке изменения статуса заказа*";
     }
-    
-    return statusMessage;
-  } catch (error) {
-    console.error("❌ Ошибка при обработке изменения статуса:", error);
-    return "⚠️ *Произошла ошибка при обработке изменения статуса заказа*";
-  }
   },
   "Order.Deleted": (data) => {
     return (
@@ -556,42 +647,49 @@ app.post("/webhook", async (req, res) => {
 // Тестовый эндпоинт для проверки обработки Order.Status.Changed
 app.get("/test-event", async (req, res) => {
   try {
-    // Создаем тестовое событие изменения статуса
-    const testEvent = {
-      id: "test-event-" + Date.now(),
-      event_name: "Order.Status.Changed",
+    const orderId = req.query.order_id;
+    if (!orderId) {
+      return res.status(400).send("❌ Не указан параметр order_id");
+    }
+    
+    // Получение токена
+    const token = await getApiToken();
+    if (!token) {
+      return res.status(500).send("❌ Не удалось получить API токен Remonline");
+    }
+    
+    // Получаем данные о заказе для эмуляции события
+    console.log(`🔍 Получение данных о заказе #${orderId} для эмуляции события`);
+    
+    // Эмулируем структуру данных события Order.Status.Changed
+    const eventData = {
       metadata: {
         order: {
-          id: req.query.order_id || "53053147",
-          name: "TEST_ORDER"
-        },
-        old: {
-          id: 1642511, // Автозапис
-          name: "Автозапис"
+          id: orderId,
+          token: token
         },
         new: {
-          id: 1342663, // Новий заказ
-          name: "Новий"
+          id: IN_PROGRESS_STATUS_ID  // Используем статус "Новий"
+        },
+        old: {
+          id: AUTO_APPOINTMENT_STATUS_ID  // Предполагаем, что старый статус был "Автозапис"
         }
-      },
-      employee: {
-        id: 268918,
-        full_name: "Тестовый пользователь"
       }
     };
     
+    console.log(`🔄 Эмуляция события Order.Status.Changed для заказа #${orderId}`);
+    
     // Обрабатываем событие
-    console.log("🔥 Обработка тестового события Order.Status.Changed");
-    const handler = eventHandlers["Order.Status.Changed"];
-    if (handler) {
-      const message = await handler(testEvent);
-      res.send(`✅ Тестовое событие обработано успешно.\nСообщение: ${message || "Без уведомления"}`);
-    } else {
-      res.status(500).send("❌ Обработчик Order.Status.Changed не найден");
+    try {
+      const result = await eventHandlers["Order.Status.Changed"](eventData);
+      res.send(`✅ Тестовое событие обработано успешно. Сообщение: ${result}`);
+    } catch (eventError) {
+      console.error("❌ Ошибка при обработке события:", eventError);
+      res.status(500).send(`❌ Ошибка при обработке события: ${eventError.message}`);
     }
   } catch (error) {
-    console.error("❌ Ошибка при обработке тестового события:", error);
-    res.status(500).send("Ошибка: " + error.message);
+    console.error("❌ Ошибка при тестировании события:", error);
+    res.status(500).send(`❌ Ошибка: ${error.message}`);
   }
 });
 
