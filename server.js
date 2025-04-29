@@ -652,41 +652,77 @@ app.get("/test-event", async (req, res) => {
       return res.status(400).send("❌ Не указан параметр order_id");
     }
     
+    // Проверка доступности API WordPress
+    console.log(`🔍 Проверка API WordPress для external_id=${orderId}...`);
+    
+    try {
+      const apiUrl = `${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-appointment`;
+      console.log(`URL запроса: ${apiUrl}`);
+      
+      const apiResponse = await axios.get(apiUrl, {
+        params: {
+          external_id: orderId,
+          secret: WORDPRESS_SECRET
+        },
+        timeout: 15000
+      });
+      
+      console.log(`✅ Ответ API WordPress: ${JSON.stringify(apiResponse.data)}`);
+      
+      if (!apiResponse.data.exists) {
+        return res.status(404).send(`❌ Запись для заказа #${orderId} не найдена в Amelia`);
+      }
+      
+      console.log(`✅ Запись найдена в Amelia, ID: ${apiResponse.data.appointment_id}`);
+    } catch (apiError) {
+      console.error(`❌ Ошибка при проверке API WordPress: ${apiError.message}`);
+      return res.status(500).send(`❌ Ошибка при проверке API WordPress: ${apiError.message}`);
+    }
+    
     // Получение токена
     const token = await getApiToken();
     if (!token) {
       return res.status(500).send("❌ Не удалось получить API токен Remonline");
     }
     
-    // Получаем данные о заказе для эмуляции события
-    console.log(`🔍 Получение данных о заказе #${orderId} для эмуляции события`);
+    // Эмулируем событие Order.Status.Changed
+    console.log(`🔄 Эмуляция события Order.Status.Changed для заказа #${orderId}`);
     
-    // Эмулируем структуру данных события Order.Status.Changed
+    // Создаем структуру данных webhook
     const eventData = {
+      event: "Order.Status.Changed",
       metadata: {
         order: {
           id: orderId,
           token: token
         },
         new: {
-          id: IN_PROGRESS_STATUS_ID  // Используем статус "Новий"
+          id: IN_PROGRESS_STATUS_ID // Используем статус "Новий"
         },
         old: {
-          id: AUTO_APPOINTMENT_STATUS_ID  // Предполагаем, что старый статус был "Автозапис"
+          id: AUTO_APPOINTMENT_STATUS_ID // Предполагаем, что старый статус был "Автозапис"
         }
       }
     };
     
-    console.log(`🔄 Эмуляция события Order.Status.Changed для заказа #${orderId}`);
+    console.log(`📦 Данные события: ${JSON.stringify(eventData, null, 2)}`);
     
     // Обрабатываем событие
-    try {
-      const result = await eventHandlers["Order.Status.Changed"](eventData);
-      res.send(`✅ Тестовое событие обработано успешно. Сообщение: ${result}`);
-    } catch (eventError) {
-      console.error("❌ Ошибка при обработке события:", eventError);
-      res.status(500).send(`❌ Ошибка при обработке события: ${eventError.message}`);
-    }
+    const result = await eventHandlers["Order.Status.Changed"](eventData);
+    
+    console.log(`✅ Результат обработки события: ${result}`);
+    
+    res.send(`
+      <h2>Тестовое событие обработано</h2>
+      <p><strong>Заказ ID:</strong> ${orderId}</p>
+      <p><strong>Результат:</strong> ${result}</p>
+      <h3>Подробные результаты:</h3>
+      <ol>
+        <li>API WordPress доступен и запись найдена</li>
+        <li>API токен Remonline получен успешно</li>
+        <li>Обработчик события вызван</li>
+      </ol>
+    `);
   } catch (error) {
     console.error("❌ Ошибка при тестировании события:", error);
     res.status(500).send(`❌ Ошибка: ${error.message}`);
@@ -752,6 +788,127 @@ app.get("/test-get-order", async (req, res) => {
   } catch (error) {
     console.error("❌ Ошибка при тестировании получения заказа:", error);
     res.status(500).send("Ошибка: " + error.message);
+  }
+});
+
+app.get("/webhook-test", (req, res) => {
+  // Создаем тестовый файл в директории сервера
+  const fs = require('fs');
+  const testMessage = `Webhook test received at ${new Date().toISOString()}\n`;
+  
+  fs.appendFile('webhook-test.log', testMessage, (err) => {
+    if (err) {
+      console.error('❌ Ошибка записи в тестовый лог:', err);
+      return res.status(500).send('Ошибка записи в лог');
+    }
+    
+    console.log('✅ Тестовое сообщение записано в лог');
+    res.send('Webhook test successful! Check server logs.');
+  });
+});
+
+// Улучшим обработчик webhook для журналирования всех входящих данных
+app.post("/webhook", (req, res) => {
+  try {
+    console.log("🔔 Получен webhook от Remonline:", new Date().toISOString());
+    console.log("📝 Заголовки запроса:", JSON.stringify(req.headers));
+    console.log("📦 Тело запроса:", JSON.stringify(req.body));
+    
+    // Записываем входящие данные в файл для сохранения истории
+    const fs = require('fs');
+    const webhookLog = `
+===== WEBHOOK RECEIVED at ${new Date().toISOString()} =====
+HEADERS: ${JSON.stringify(req.headers, null, 2)}
+BODY: ${JSON.stringify(req.body, null, 2)}
+===========================================
+`;
+    
+    fs.appendFile('webhook-full.log', webhookLog, (err) => {
+      if (err) {
+        console.error('❌ Ошибка записи в лог webhook:', err);
+      }
+    });
+    
+    // Проверяем структуру тела запроса
+    if (!req.body || !req.body.event) {
+      console.error("❌ Неверный формат webhook, отсутствует поле event");
+      return res.status(400).send("Неверный формат webhook");
+    }
+    
+    const event = req.body.event;
+    console.log(`📣 Тип события: ${event}`);
+    
+    // Проверяем, есть ли обработчик для данного события
+    if (eventHandlers[event]) {
+      console.log(`✅ Найден обработчик для события ${event}`);
+      
+      // Вызываем обработчик события асинхронно
+      eventHandlers[event](req.body)
+        .then(result => {
+          console.log(`✅ Событие ${event} обработано успешно:`, result);
+        })
+        .catch(error => {
+          console.error(`❌ Ошибка при обработке события ${event}:`, error);
+        });
+      
+      // Сразу отвечаем успехом, чтобы не блокировать Remonline
+      return res.status(200).send("Webhook received");
+    } else {
+      console.log(`ℹ️ Нет обработчика для события ${event}`);
+      return res.status(200).send(`Нет обработчика для события ${event}`);
+    }
+  } catch (error) {
+    console.error("❌ Ошибка при обработке webhook:", error);
+    return res.status(500).send("Internal server error");
+  }
+});
+
+app.get("/simulate-webhook", async (req, res) => {
+  try {
+    const orderId = req.query.order_id || '53160008';
+    const newStatusId = req.query.status_id || '1342663'; // По умолчанию "Новый"
+    
+    console.log(`🔄 Симуляция webhook для заказа #${orderId}, новый статус: ${newStatusId}`);
+    
+    // Получаем токен
+    const token = await getApiToken();
+    
+    // Создаем структуру данных webhook
+    const webhookData = {
+      event: "Order.Status.Changed",
+      metadata: {
+        order: {
+          id: orderId,
+          token: token
+        },
+        new: {
+          id: newStatusId
+        },
+        old: {
+          id: "1642511" // Предполагаем, что старый статус был "Автозапис"
+        }
+      }
+    };
+    
+    // Логгируем данные webhook
+    console.log("📦 Данные имитации webhook:", JSON.stringify(webhookData, null, 2));
+    
+    // Вызываем обработчик напрямую
+    const result = await eventHandlers["Order.Status.Changed"](webhookData);
+    
+    console.log("✅ Результат обработки:", result);
+    
+    res.send(`
+      <h2>Результат симуляции webhook</h2>
+      <p><strong>Заказ ID:</strong> ${orderId}</p>
+      <p><strong>Новый статус:</strong> ${newStatusId} (${statusNames[newStatusId] || 'Неизвестный'})</p>
+      <p><strong>Результат:</strong> ${result}</p>
+      <h3>Данные webhook:</h3>
+      <pre>${JSON.stringify(webhookData, null, 2)}</pre>
+    `);
+  } catch (error) {
+    console.error("❌ Ошибка при симуляции webhook:", error);
+    res.status(500).send(`Ошибка: ${error.message}`);
   }
 });
 
