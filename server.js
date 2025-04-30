@@ -17,6 +17,9 @@ const tokenRefreshJob = schedule.scheduleJob('0 */23 * * *', async function() {
 // const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "1316558920";
 // const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "VSBpuxhNp0LJ5hJwiN8FZ";
 
+const REMONLINE_API_KEY = process.env.REMONLINE_API_KEY || '';
+let REMONLINE_API_TOKEN = process.env.REMONLINE_API_TOKEN || '';
+let REMONLINE_TOKEN_EXPIRY = 0;
 const WORDPRESS_URL = process.env.WORDPRESS_URL || ''; 
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || ''; // Секретный ключ для запросов к WordPress
 let api_token = process.env.REMONLINE_API_TOKEN || '';
@@ -47,75 +50,45 @@ console.log(`  - WORDPRESS_URL: ${WORDPRESS_URL}`);
 console.log(`  - API Token: ${api_token ? 'установлен' : 'не установлен'}`);
 console.log(`  - API Key: ${process.env.REMONLINE_API_KEY ? 'установлен' : 'не установлен'}`);
 console.log(`  - Webhook Secret: ${WORDPRESS_SECRET ? 'установлен' : 'не установлен'}`);
+
 /**
- * Обновляет токен Remonline API через локальный ключ API
- * @returns {string|null} Новый токен или null при ошибке
+ * Обновляет API токен Remonline с использованием API ключа
+ * @returns {Promise<string|null>} Новый токен или null при ошибке
  */
-async function updateRemonlineToken() {
+async function updateApiToken() {
   try {
-    const api_key = process.env.REMONLINE_API_KEY;
-    if (!api_key) {
-      console.error("❌ API ключ Remonline не настроен в переменных окружения");
+    console.log("🔄 Обновление API токена Remonline...");
+    
+    if (!REMONLINE_API_KEY) {
+      console.error("❌ Отсутствует REMONLINE_API_KEY в переменных окружения");
       return null;
     }
-
-    console.log("🔄 Запрос на обновление токена Remonline через API");
-
+    
+    console.log(`🔑 Используем API ключ: ${REMONLINE_API_KEY.substring(0, 5)}...`);
+    
     const response = await axios.post("https://api.remonline.app/token/new", {
-      api_key: api_key
-    }, {
-      headers: {
-        'accept': 'application/json',
-        'content-type': 'application/json'
-      },
-      timeout: 10000
+      api_key: REMONLINE_API_KEY
     });
-
-    if (response.status === 200 && response.data && response.data.token) {
-      const newToken = response.data.token;
-      console.log(`✅ Токен Remonline успешно обновлен (${newToken.substring(0, 5)}...)`);
+    
+    if (response.data && response.data.token) {
+      const token = response.data.token;
+      // Сохраняем токен в глобальных переменных
+      REMONLINE_API_TOKEN = token;
+      REMONLINE_TOKEN_EXPIRY = Date.now() + 23 * 60 * 60 * 1000;
       
-      // Обновляем глобальные переменные
-      api_token = newToken;
-      token_expiry = Math.floor(Date.now() / 1000) + 24*3600;
-      
-      return newToken;
+      console.log(`✅ API токен Remonline обновлен: ${token.substring(0, 5)}...`);
+      return token;
     } else {
-      console.error("❌ Ошибка при обновлении токена: неверный формат ответа");
+      console.error("❌ Неверный ответ API при обновлении токена");
+      console.error("Ответ API:", response.data);
       return null;
     }
   } catch (error) {
-    console.error("❌ Ошибка при обновлении токена:", error.message);
+    console.error(`❌ Ошибка при обновлении API токена: ${error.message}`);
     if (error.response) {
-      console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+      console.error("Статус:", error.response.status);
+      console.error("Данные:", error.response.data);
     }
-    return null;
-  }
-}
-
-/**
- * Получает актуальный токен Remonline из WordPress
- */
-async function getTokenFromWordPress() {
-  try {
-    console.log("🔄 Запрос актуального токена из WordPress");
-    
-    const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/get-token`, {
-      params: {
-        secret: WORDPRESS_SECRET
-      },
-      timeout: 10000
-    });
-    
-    if (response.status === 200 && response.data && response.data.token) {
-      console.log("✅ Получен актуальный токен Remonline из WordPress");
-      return response.data.token;
-    } else {
-      console.error("❌ Ошибка при получении токена: неверный формат ответа");
-      return null;
-    }
-  } catch (error) {
-    console.error("❌ Ошибка при получении токена из WordPress:", error.message);
     return null;
   }
 }
@@ -605,6 +578,23 @@ async function getOrderScheduledTime(orderId, providedToken = null) {
   }
 }
 
+app.listen(PORT, async () => {
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  console.log(`REMONLINE_API_KEY установлен: ${REMONLINE_API_KEY ? 'Да' : 'Нет'}`);
+  
+  // При запуске пробуем получить новый токен
+  try {
+    const token = await updateApiToken();
+    if (token) {
+      console.log(`✅ Начальный токен API Remonline получен: ${token.substring(0, 5)}...`);
+    } else {
+      console.warn(`⚠️ Не удалось получить начальный токен API Remonline`);
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при получении начального токена: ${error.message}`);
+  }
+});
+
 // Объект для обработки разных типов событий
 const eventHandlers = {
   "Order.Created": async (data) => {
@@ -752,46 +742,6 @@ const eventHandlers = {
   },
 };
 
-// Вебхук от Remonline
-app.post("/webhook", async (req, res) => {
-  console.log("⭐ WEBHOOK RECEIVED ⭐");
-  console.log("Headers:", JSON.stringify(req.headers));
-  console.log("Raw webhook data:", JSON.stringify(req.body, null, 2));
-  try {
-    const xSignature = req.headers['x-signature'] || req.body['x-signature'];
-    if (xSignature) {
-      console.log(`Получена подпись: ${xSignature}`);
-      
-    } else {
-      console.log(`Предупреждение: запрос без подписи или ключа`);
-    }
-
-    const data = req.body;
-    console.log("🔥 Получен запрос от Remonline:", data.event_name);
-
-    const handler = eventHandlers[data.event_name];
-    let message;
-    
-    if (handler) {
-      message = await handler(data);
-      
-      // Если handler вернул null — пропускаем отправку в Telegram
-      if (message === null) {
-        console.log("⏩ Пропуск отправки сообщения в Telegram");
-        return res.status(200).send("OK (notification skipped)");
-      }
-    } else {
-      message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
-    }
-
-    // Если нужна отправка в Telegram
-    // await sendTelegramMessageWithRetry(message);
-    res.status(200).send("OK");
-  } catch (error) {
-    console.error("❌ Ошибка обработки запроса:", error);
-    res.status(200).send("Error handled"); // Отвечаем 200 OK, чтобы Remonline не повторял запрос
-  }
-});
 
 // Тестовый эндпоинт для проверки обработки Order.Status.Changed
 app.get("/test-event", async (req, res) => {
@@ -1090,6 +1040,67 @@ app.get("/set-api-key", (req, res) => {
     `);
   } else {
     res.status(400).send('Не указан API ключ. Используйте ?key=YOUR_API_KEY');
+  }
+});
+
+app.get("/api-key-info", (req, res) => {
+  const keyInfo = {
+    apiKey: REMONLINE_API_KEY ? `${REMONLINE_API_KEY.substring(0, 5)}...` : 'не установлен',
+    token: REMONLINE_API_TOKEN ? `${REMONLINE_API_TOKEN.substring(0, 5)}...` : 'не установлен',
+    tokenExpiry: REMONLINE_TOKEN_EXPIRY ? new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString() : 'не установлено'
+  };
+  
+  res.send(`
+    <h2>Информация об API ключе и токене</h2>
+    <pre>${JSON.stringify(keyInfo, null, 2)}</pre>
+    <p><a href="/refresh-token">Обновить токен API</a></p>
+  `);
+});
+
+// Отладочный маршрут для проверки API ключа
+app.get("/debug-token", async (req, res) => {
+  try {
+    console.log("🔍 Отладка токена API");
+    console.log(`API ключ в переменных окружения: ${process.env.REMONLINE_API_KEY ? 'Установлен' : 'Отсутствует'}`);
+    console.log(`API ключ в коде: ${REMONLINE_API_KEY ? 'Установлен' : 'Отсутствует'}`);
+    
+    // Прямая проверка API ключа
+    const apiKey = REMONLINE_API_KEY || process.env.REMONLINE_API_KEY || '275a47a9b5eb4249ad4e8d6e0c2f219b';
+    
+    console.log(`🔑 Попытка обновления токена с ключом: ${apiKey.substring(0, 5)}...`);
+    
+    const response = await axios.post("https://api.remonline.app/token/new", {
+      api_key: apiKey
+    });
+    
+    if (response.data && response.data.token) {
+      const token = response.data.token;
+      console.log(`✅ Токен успешно получен: ${token}`);
+      
+      REMONLINE_API_TOKEN = token;
+      REMONLINE_TOKEN_EXPIRY = Date.now() + 23 * 60 * 60 * 1000;
+      
+      res.send(`
+        <h2>✅ Отладка токена успешна</h2>
+        <p><strong>API ключ:</strong> ${apiKey.substring(0, 5)}...</p>
+        <p><strong>Полученный токен:</strong> ${token}</p>
+        <p><strong>Токен действителен до:</strong> ${new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString()}</p>
+      `);
+    } else {
+      console.error("❌ Неверный ответ API:", response.data);
+      res.status(500).send(`
+        <h2>❌ Ошибка при получении токена</h2>
+        <p>API вернул ответ без токена</p>
+        <pre>${JSON.stringify(response.data, null, 2)}</pre>
+      `);
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при отладке токена: ${error.message}`);
+    res.status(500).send(`
+      <h2>❌ Ошибка при отладке токена</h2>
+      <p>${error.message}</p>
+      ${error.response ? `<pre>Статус: ${error.response.status}\nДанные: ${JSON.stringify(error.response.data, null, 2)}</pre>` : ''}
+    `);
   }
 });
 
