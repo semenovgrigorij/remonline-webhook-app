@@ -2,8 +2,15 @@ const orderCache = new Map(); // Хранит данные заказов
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const schedule = require('node-schedule');
 // const crypto = require("crypto");
 require("dotenv").config();
+
+// Обновлять токен каждые 23 часа
+const tokenRefreshJob = schedule.scheduleJob('0 */23 * * *', async function() {
+  console.log(`🕒 Плановое обновление токена API Remonline...`);
+  await updateApiToken();
+});
 
 // Конфигурация
 // const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8026606898:AAEcpb8avNsTWe8ehwDVsAF-sKy3WiYKfwg";
@@ -167,6 +174,194 @@ async function getApiToken() {
   }
 }
 
+/**
+ * Обновляет API токен Remonline с использованием постоянного API ключа
+ * @returns {Promise<string|null>} Новый токен или null при ошибке
+ */
+async function updateApiToken() {
+  try {
+    console.log("🔄 Обновление API токена Remonline...");
+    
+    if (!REMONLINE_API_KEY) {
+      console.error("❌ Отсутствует REMONLINE_API_KEY в переменных окружения");
+      return null;
+    }
+    
+    const response = await axios.post("https://api.remonline.app/token/new", {
+      api_key: REMONLINE_API_KEY
+    });
+    
+    if (response.data && response.data.token) {
+      const token = response.data.token;
+      // Сохраняем токен в глобальной переменной
+      REMONLINE_API_TOKEN = token;
+      // Обновляем время истечения токена (24 часа от текущего момента)
+      REMONLINE_TOKEN_EXPIRY = Date.now() + 23 * 60 * 60 * 1000;
+      
+      console.log(`✅ API токен Remonline обновлен: ${token.substring(0, 5)}...`);
+      return token;
+    } else {
+      console.error("❌ Неверный ответ API при обновлении токена");
+      console.error("Ответ API:", response.data);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при обновлении API токена: ${error.message}`);
+    if (error.response) {
+      console.error("Статус:", error.response.status);
+      console.error("Данные:", error.response.data);
+    }
+    return null;
+  }
+}
+
+app.get("/refresh-token", async (req, res) => {
+  try {
+    // Принудительное обновление токена
+    const newToken = await updateApiToken();
+    
+    if (newToken) {
+      res.send(`
+        <h2>✅ Токен успешно обновлен</h2>
+        <p><strong>Новый токен:</strong> ${newToken.substring(0, 5)}...</p>
+        <p><strong>Действителен до:</strong> ${new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString()}</p>
+        <p><a href="/test-connection">Проверить соединение с Remonline</a></p>
+      `);
+    } else {
+      res.status(500).send(`
+        <h2>❌ Не удалось обновить токен</h2>
+        <p>Проверьте API ключ и логи сервера.</p>
+        <p><strong>Текущий API ключ:</strong> ${REMONLINE_API_KEY ? REMONLINE_API_KEY.substring(0, 5) + '...' : 'не установлен'}</p>
+      `);
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при обновлении токена: ${error.message}`);
+    res.status(500).send(`Ошибка: ${error.message}`);
+  }
+});
+
+// Маршрут для проверки соединения с Remonline
+app.get("/test-connection", async (req, res) => {
+  try {
+    const token = await getApiToken();
+    
+    if (!token) {
+      return res.status(500).send("❌ Не удалось получить токен API");
+    }
+    
+    // Простой запрос к API для проверки работоспособности токена
+    const response = await axios.get(`https://api.remonline.app/company/info?token=${token}`);
+    
+    if (response.data && response.data.success !== false) {
+      res.send(`
+        <h2>✅ Соединение с Remonline успешно установлено</h2>
+        <p><strong>Токен:</strong> ${token.substring(0, 5)}...</p>
+        <p><strong>Информация о компании:</strong></p>
+        <pre>${JSON.stringify(response.data, null, 2)}</pre>
+      `);
+    } else {
+      res.status(500).send(`
+        <h2>❌ Ошибка при проверке соединения</h2>
+        <p>API вернул ошибку.</p>
+        <pre>${JSON.stringify(response.data, null, 2)}</pre>
+      `);
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при проверке соединения: ${error.message}`);
+    res.status(500).send(`
+      <h2>❌ Ошибка при проверке соединения</h2>
+      <p>${error.message}</p>
+      ${error.response ? `<pre>Статус: ${error.response.status}\nДанные: ${JSON.stringify(error.response.data, null, 2)}</pre>` : ''}
+    `);
+  }
+});
+
+/**
+ * Получает действительный API токен Remonline, при необходимости обновляя его
+ * @returns {Promise<string|null>} Действительный токен или null при ошибке
+ */
+async function getApiToken() {
+  try {
+    // Проверяем, есть ли токен и не истек ли он
+    if (REMONLINE_API_TOKEN && REMONLINE_TOKEN_EXPIRY && Date.now() < REMONLINE_TOKEN_EXPIRY) {
+      console.log(`📋 Используем кэшированный токен Remonline (${REMONLINE_API_TOKEN.substring(0, 5)}...)`);
+      return REMONLINE_API_TOKEN;
+    }
+    
+    // Если токена нет или он истек, получаем новый
+    console.log(`🔄 Токен отсутствует или истек, получаем новый...`);
+    return await updateApiToken();
+  } catch (error) {
+    console.error(`❌ Ошибка при получении API токена: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Получает запланированное время заказа из Remonline
+ * @param {string} orderId ID заказа
+ * @param {string} token API токен
+ * @returns {Promise<number|null>} Время в миллисекундах или null
+ */
+async function getOrderScheduledTime(orderId, token) {
+  try {
+    const url = `https://api.remonline.app/order/${orderId}?token=${token}`;
+    const response = await axios.get(url);
+    
+    if (response.data && response.data.data && response.data.data.scheduled_for) {
+      const scheduledTime = response.data.data.scheduled_for;
+      console.log(`✅ Получено запланированное время для заказа #${orderId}: ${scheduledTime} (${new Date(scheduledTime).toLocaleString()})`);
+      return scheduledTime;
+    }
+    
+    console.log(`ℹ️ У заказа #${orderId} не указано запланированное время`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Ошибка при получении данных заказа #${orderId}: ${error.message}`);
+    
+    // Проверяем, связана ли ошибка с недействительным токеном
+    if (error.response && 
+        error.response.status === 403 && 
+        error.response.data && 
+        error.response.data.message && 
+        error.response.data.message.includes('Invalid token')) {
+      
+      console.log("🔑 Токен недействителен, обновляем токен и повторяем запрос...");
+      
+      // Обновляем токен
+      const newToken = await updateApiToken();
+      
+      if (newToken) {
+        console.log(`🔄 Повторный запрос данных заказа #${orderId} с новым токеном`);
+        
+        // Повторяем запрос с новым токеном
+        try {
+          const newUrl = `https://api.remonline.app/order/${orderId}?token=${newToken}`;
+          const newResponse = await axios.get(newUrl);
+          
+          if (newResponse.data && newResponse.data.data && newResponse.data.data.scheduled_for) {
+            const scheduledTime = newResponse.data.data.scheduled_for;
+            console.log(`✅ Получено запланированное время для заказа #${orderId}: ${scheduledTime} (${new Date(scheduledTime).toLocaleString()})`);
+            return scheduledTime;
+          }
+          
+          console.log(`ℹ️ У заказа #${orderId} не указано запланированное время`);
+          return null;
+        } catch (newError) {
+          console.error(`❌ Ошибка при повторном получении данных заказа: ${newError.message}`);
+          return null;
+        }
+      }
+    }
+    
+    if (error.response) {
+      console.error(`Статус: ${error.response.status}, Данные:`, error.response.data);
+    }
+    
+    console.log(`ℹ️ У заказа #${orderId} не указано запланированное время`);
+    return null;
+  }
+}
 
 // Поддержка JSON и x-www-form-urlencoded
 app.use(bodyParser.json());
@@ -505,17 +700,22 @@ const eventHandlers = {
       
       console.log(`⚡ Изменение статуса заказа #${orderIdStr}: ${oldStatusIdStr} (${statusNames[oldStatusIdStr] || 'Неизвестный'}) -> ${newStatusIdStr} (${statusNames[newStatusIdStr] || 'Неизвестный'})`);
       
-      // Получаем токен для API Remonline
-      const token = data.metadata.order.token || await getApiToken();
-      if (!token) {
-        console.error("❌ Ошибка: не удалось получить API токен Remonline");
-        return "⚠️ *Ошибка обработки изменения статуса: проблема с API*";
-      }
-      
+      // Проверяем токен и при необходимости обновляем его
+      let token = data.metadata.order.token;
+
       // Получаем данные о времени из Remonline API
       let scheduledTime = null;
       try {
         scheduledTime = await getOrderScheduledTime(orderIdStr, token);
+        // Если не удалось получить время и причина в токене, попробуем с новым токеном
+      if (!scheduledTime) {
+        console.log(`🔄 Попытка получить данные заказа с обновленным токеном...`);
+        token = await getApiToken(); // Обновляем токен
+        
+        if (token) {
+          scheduledTime = await getOrderScheduledTime(orderIdStr, token);
+        }
+      }
         if (scheduledTime) {
           console.log(`📅 Запланированное время заказа #${orderIdStr}: ${new Date(scheduledTime).toLocaleString()}`);
         } else {
@@ -575,6 +775,8 @@ const eventHandlers = {
       }
       
       return statusMessage;
+
+      
     } catch (error) {
       console.error("❌ Ошибка при обработке изменения статуса:", error.message);
       if (error.stack) {
