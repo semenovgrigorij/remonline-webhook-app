@@ -6,6 +6,9 @@ const schedule = require('node-schedule');
 // const crypto = require("crypto");
 require("dotenv").config();
 
+const PORT = process.env.PORT || 3000;
+
+
 // Обновлять токен каждые 23 часа
 const tokenRefreshJob = schedule.scheduleJob('0 */23 * * *', async function() {
   console.log(`🕒 Плановое обновление токена API Remonline...`);
@@ -1156,11 +1159,10 @@ app.get("/debug-token", async (req, res) => {
   );
 } */
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-});
 
+  app.listen(PORT, () => {
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  });
 
 
 
