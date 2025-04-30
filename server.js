@@ -1095,6 +1095,202 @@ app.get("/debug-token", async (req, res) => {
 });
 
 
+app.get("/test-remonline-api", async (req, res) => {
+  try {
+    console.log("🔍 Проверка соединения с API Remonline");
+    
+    // Получаем токен
+    const token = await getApiToken();
+    if (!token) {
+      return res.status(500).send("❌ Не удалось получить API токен Remonline");
+    }
+    
+    console.log(`🔑 Используем токен: ${token.substring(0, 5)}...`);
+    
+    // Проверяем доступ к API - запрашиваем информацию о компании
+    console.log("📡 Запрос информации о компании...");
+    const companyInfoResponse = await axios.get(`https://api.remonline.app/company/info?token=${token}`);
+    
+    // Проверяем доступ к API заказов - пробуем получить список заказов
+    console.log("📡 Запрос списка заказов...");
+    const ordersResponse = await axios.get(`https://api.remonline.app/order?token=${token}&page=1&per_page=5`);
+    
+    res.send(`
+      <h2>✅ Соединение с API Remonline успешно проверено</h2>
+      <h3>Информация о компании:</h3>
+      <pre>${JSON.stringify(companyInfoResponse.data, null, 2)}</pre>
+      <h3>Пример заказов:</h3>
+      <pre>${JSON.stringify(ordersResponse.data, null, 2)}</pre>
+    `);
+  } catch (error) {
+    console.error("❌ Ошибка при проверке API Remonline:", error);
+    
+    let errorDetails = "";
+    if (error.response) {
+      errorDetails = `
+        <h3>Детали ошибки:</h3>
+        <p><strong>Статус:</strong> ${error.response.status}</p>
+        <pre>${JSON.stringify(error.response.data, null, 2)}</pre>
+      `;
+    }
+    
+    res.status(500).send(`
+      <h2>❌ Ошибка при проверке API Remonline</h2>
+      <p>${error.message}</p>
+      ${errorDetails}
+    `);
+  }
+});
+
+app.get("/test-wordpress-api", async (req, res) => {
+  try {
+    console.log("🔍 Проверка соединения с WordPress API");
+    
+    // Проверка API
+    console.log(`📡 Запрос к API: ${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-connection`);
+    const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-connection`, {
+      params: {
+        secret: WORDPRESS_SECRET
+      },
+      timeout: 10000
+    });
+    
+    console.log("✅ Ответ от WordPress API:", response.data);
+    
+    res.send(`
+      <h2>✅ Соединение с WordPress API успешно проверено</h2>
+      <h3>Ответ API:</h3>
+      <pre>${JSON.stringify(response.data, null, 2)}</pre>
+    `);
+  } catch (error) {
+    console.error("❌ Ошибка при проверке WordPress API:", error);
+    
+    let errorDetails = "";
+    if (error.response) {
+      errorDetails = `
+        <h3>Детали ошибки:</h3>
+        <p><strong>Статус:</strong> ${error.response.status}</p>
+        <pre>${JSON.stringify(error.response.data, null, 2)}</pre>
+      `;
+    }
+    
+    res.status(500).send(`
+      <h2>❌ Ошибка при проверке WordPress API</h2>
+      <p>${error.message}</p>
+      ${errorDetails}
+    `);
+  }
+});
+
+app.get("/diagnostics", async (req, res) => {
+  try {
+    console.log("🔬 Запуск полной диагностики системы");
+    
+    const diagnosticResults = {
+      server: {
+        status: "✅ Работает",
+        timestamp: new Date().toLocaleString()
+      },
+      variables: {
+        WORDPRESS_URL: WORDPRESS_URL ? "✅ Установлен" : "❌ Отсутствует",
+        WORDPRESS_SECRET: WORDPRESS_SECRET ? "✅ Установлен" : "❌ Отсутствует", 
+        REMONLINE_API_KEY: REMONLINE_API_KEY ? "✅ Установлен" : "❌ Отсутствует",
+        REMONLINE_API_TOKEN: REMONLINE_API_TOKEN ? "✅ Установлен" : "❌ Отсутствует",
+        TOKEN_EXPIRY: REMONLINE_TOKEN_EXPIRY ? `✅ До ${new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString()}` : "❌ Не установлено"
+      },
+      remonlineAPI: { status: "⏳ Проверка..." },
+      wordpressAPI: { status: "⏳ Проверка..." }
+    };
+    
+    // Проверка Remonline API
+    try {
+      const token = await getApiToken();
+      if (!token) {
+        diagnosticResults.remonlineAPI = {
+          status: "❌ Не удалось получить токен",
+          error: "Ошибка получения токена"
+        };
+      } else {
+        const response = await axios.get(`https://api.remonline.app/company/info?token=${token}`);
+        diagnosticResults.remonlineAPI = {
+          status: "✅ Соединение успешно",
+          token: `${token.substring(0, 5)}...`,
+          data: response.data
+        };
+      }
+    } catch (remonlineError) {
+      diagnosticResults.remonlineAPI = {
+        status: "❌ Ошибка соединения",
+        error: remonlineError.message,
+        response: remonlineError.response ? {
+          status: remonlineError.response.status,
+          data: remonlineError.response.data
+        } : null
+      };
+    }
+    
+    // Проверка WordPress API
+    try {
+      const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/check-connection`, {
+        params: { secret: WORDPRESS_SECRET },
+        timeout: 10000
+      });
+      
+      diagnosticResults.wordpressAPI = {
+        status: "✅ Соединение успешно",
+        data: response.data
+      };
+    } catch (wordpressError) {
+      diagnosticResults.wordpressAPI = {
+        status: "❌ Ошибка соединения",
+        error: wordpressError.message,
+        response: wordpressError.response ? {
+          status: wordpressError.response.status,
+          data: wordpressError.response.data
+        } : null
+      };
+    }
+    
+    console.log("🔬 Результаты диагностики:", JSON.stringify(diagnosticResults, null, 2));
+    
+    res.send(`
+      <h2>📊 Результаты полной диагностики системы</h2>
+      <h3>Статус сервера: ${diagnosticResults.server.status}</h3>
+      <p>Время: ${diagnosticResults.server.timestamp}</p>
+      
+      <h3>Переменные окружения:</h3>
+      <ul>
+        ${Object.entries(diagnosticResults.variables).map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`).join('')}
+      </ul>
+      
+      <h3>Соединение с Remonline API: ${diagnosticResults.remonlineAPI.status}</h3>
+      ${diagnosticResults.remonlineAPI.error ? 
+        `<p><strong>Ошибка:</strong> ${diagnosticResults.remonlineAPI.error}</p>` : 
+        `<p><strong>Токен:</strong> ${diagnosticResults.remonlineAPI.token}</p>`}
+      
+      <h3>Соединение с WordPress API: ${diagnosticResults.wordpressAPI.status}</h3>
+      ${diagnosticResults.wordpressAPI.error ? 
+        `<p><strong>Ошибка:</strong> ${diagnosticResults.wordpressAPI.error}</p>` : 
+        `<p><strong>API доступен</strong></p>`}
+      
+      <h3>Инструменты диагностики:</h3>
+      <ul>
+        <li><a href="/webhook-test-manual">Ручная имитация вебхука</a></li>
+        <li><a href="/test-remonline-api">Проверка API Remonline</a></li>
+        <li><a href="/test-wordpress-api">Проверка API WordPress</a></li>
+        <li><a href="/debug-token">Диагностика токена</a></li>
+      </ul>
+    `);
+  } catch (error) {
+    console.error("❌ Ошибка при выполнении диагностики:", error);
+    res.status(500).send(`
+      <h2>❌ Ошибка при выполнении диагностики</h2>
+      <p>${error.message}</p>
+      <pre>${error.stack}</pre>
+    `);
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
