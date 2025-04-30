@@ -1114,6 +1114,38 @@ app.get("/simulate-webhook", async (req, res) => {
   }
 });
 
+// Маршрут для проверки переменных окружения (только для отладки)
+app.get("/env-check", (req, res) => {
+  const envVars = {
+    REMONLINE_API_KEY: process.env.REMONLINE_API_KEY ? `${process.env.REMONLINE_API_KEY.substring(0, 5)}...` : 'не установлен',
+    NODE_ENV: process.env.NODE_ENV,
+    TOKEN_STATUS: global.REMONLINE_API_TOKEN ? 'установлен' : 'не установлен',
+    TOKEN_EXPIRY: global.REMONLINE_TOKEN_EXPIRY ? new Date(global.REMONLINE_TOKEN_EXPIRY).toLocaleString() : 'не установлено'
+  };
+  
+  res.send(`
+    <h2>Проверка переменных окружения</h2>
+    <pre>${JSON.stringify(envVars, null, 2)}</pre>
+  `);
+});
+
+// Маршрут для установки API ключа вручную
+app.get("/set-api-key", (req, res) => {
+  const apiKey = req.query.key || '275a47a9b5eb4249ad4e8d6e0c2f219b';
+  
+  if (apiKey) {
+    process.env.REMONLINE_API_KEY = apiKey;
+    console.log(`🔑 API ключ установлен вручную: ${apiKey.substring(0, 5)}...`);
+    res.send(`
+      <h2>✅ API ключ Remonline установлен</h2>
+      <p><strong>Ключ:</strong> ${apiKey.substring(0, 5)}...</p>
+      <p><a href="/refresh-token">Обновить токен API</a></p>
+    `);
+  } else {
+    res.status(400).send('Не указан API ключ. Используйте ?key=YOUR_API_KEY');
+  }
+});
+
 // Отправка в Telegram с повторными попытками
 /* async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
