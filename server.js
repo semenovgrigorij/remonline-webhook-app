@@ -24,8 +24,7 @@ let REMONLINE_API_TOKEN = process.env.REMONLINE_API_TOKEN || '';
 let REMONLINE_TOKEN_EXPIRY = 0;
 const WORDPRESS_URL = process.env.WORDPRESS_URL || ''; 
 const WORDPRESS_SECRET = process.env.WORDPRESS_SECRET || ''; // Секретный ключ для запросов к WordPress
-let api_token = process.env.REMONLINE_API_TOKEN || '';
-let token_expiry = 0;
+
 
 // Проверка конфигурации
 if (!WORDPRESS_SECRET) {
