@@ -909,59 +909,32 @@ app.get("/webhook-test", (req, res) => {
   });
 });
 
-// Улучшим обработчик webhook для журналирования всех входящих данных
 app.post("/webhook", (req, res) => {
   try {
-    console.log("🔔 Получен webhook от Remonline:", new Date().toISOString());
+    console.log("🔔 Получен webhook от Remonline:", new Date().toLocaleString());
     console.log("📝 Заголовки запроса:", JSON.stringify(req.headers));
     console.log("📦 Тело запроса:", JSON.stringify(req.body));
     
-    // Записываем входящие данные в файл для сохранения истории
-    const fs = require('fs');
-    const webhookLog = `
-===== WEBHOOK RECEIVED at ${new Date().toISOString()} =====
-HEADERS: ${JSON.stringify(req.headers, null, 2)}
-BODY: ${JSON.stringify(req.body, null, 2)}
-===========================================
-`;
-    
-    fs.appendFile('webhook-full.log', webhookLog, (err) => {
-      if (err) {
-        console.error('❌ Ошибка записи в лог webhook:', err);
-      }
-    });
-    
-    // Проверяем структуру тела запроса
-    if (!req.body || !req.body.event) {
-      console.error("❌ Неверный формат webhook, отсутствует поле event");
-      return res.status(400).send("Неверный формат webhook");
+    // Проверка структуры запроса
+    if (!req.body) {
+      console.warn("⚠️ Пустое тело запроса");
+      return res.status(200).send("Empty body");
     }
     
-    const event = req.body.event;
-    console.log(`📣 Тип события: ${event}`);
-    
-    // Проверяем, есть ли обработчик для данного события
-    if (eventHandlers[event]) {
-      console.log(`✅ Найден обработчик для события ${event}`);
-      
-      // Вызываем обработчик события асинхронно
-      eventHandlers[event](req.body)
-        .then(result => {
-          console.log(`✅ Событие ${event} обработано успешно:`, result);
-        })
-        .catch(error => {
-          console.error(`❌ Ошибка при обработке события ${event}:`, error);
-        });
-      
-      // Сразу отвечаем успехом, чтобы не блокировать Remonline
-      return res.status(200).send("Webhook received");
-    } else {
-      console.log(`ℹ️ Нет обработчика для события ${event}`);
-      return res.status(200).send(`Нет обработчика для события ${event}`);
+    // Проверяем наличие поля event
+    if (!req.body.event_name && !req.body.event) {
+      console.warn("⚠️ Отсутствует поле event или event_name в запросе");
+      return res.status(200).send("Missing event field");
     }
+    
+    // Определяем тип события
+    const eventName = req.body.event_name || req.body.event;
+    console.log(`📣 Тип события: ${eventName}`);
+    
+    // Остальной код обработки...
   } catch (error) {
     console.error("❌ Ошибка при обработке webhook:", error);
-    return res.status(500).send("Internal server error");
+    return res.status(200).send("Error handled");
   }
 });
 
@@ -1104,6 +1077,33 @@ app.get("/debug-token", async (req, res) => {
       <p>${error.message}</p>
       ${error.response ? `<pre>Статус: ${error.response.status}\nДанные: ${JSON.stringify(error.response.data, null, 2)}</pre>` : ''}
     `);
+  }
+});
+
+app.get("/force-token-update", async (req, res) => {
+  try {
+    console.log("🔄 Принудительное обновление токена");
+    
+    // Сбрасываем существующий токен
+    REMONLINE_API_TOKEN = '';
+    REMONLINE_TOKEN_EXPIRY = 0;
+    
+    // Получаем новый токен
+    const newToken = await updateApiToken();
+    
+    if (newToken) {
+      res.send(`
+        <h2>✅ Токен успешно обновлен</h2>
+        <p><strong>Новый токен:</strong> ${newToken.substring(0, 5)}...</p>
+        <p><strong>Действителен до:</strong> ${new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString()}</p>
+        <p><a href="/test-get-order?order_id=53174480">Проверить получение заказа</a></p>
+      `);
+    } else {
+      res.status(500).send("❌ Не удалось обновить токен");
+    }
+  } catch (error) {
+    console.error("❌ Ошибка:", error.message);
+    res.status(500).send(`Ошибка: ${error.message}`);
   }
 });
 
