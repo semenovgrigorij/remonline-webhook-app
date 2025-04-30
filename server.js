@@ -48,7 +48,7 @@ const app = express();
 
 console.log("🔧 Конфигурация API:");
 console.log(`  - WORDPRESS_URL: ${WORDPRESS_URL}`);
-console.log(`  - API Token: ${api_token ? 'установлен' : 'не установлен'}`);
+console.log(`  - API Token: ${process.env.REMONLINE_API_TOKEN ? 'установлен' : 'не установлен'}`);
 console.log(`  - API Key: ${process.env.REMONLINE_API_KEY ? 'установлен' : 'не установлен'}`);
 console.log(`  - Webhook Secret: ${WORDPRESS_SECRET ? 'установлен' : 'не установлен'}`);
 
