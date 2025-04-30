@@ -8,9 +8,8 @@ require("dotenv").config();
 
 const PORT = process.env.PORT || 3000;
 
-
 // Обновлять токен каждые 23 часа
-const tokenRefreshJob = schedule.scheduleJob('0 */23 * * *', async function() {
+schedule.scheduleJob('0 */23 * * *', async function() {
   console.log(`🕒 Плановое обновление токена API Remonline...`);
   await updateApiToken();
 });
@@ -95,7 +94,6 @@ async function updateApiToken() {
     return null;
   }
 }
-
 
 /**
  * Обновляет API токен Remonline с использованием постоянного API ключа
@@ -198,6 +196,27 @@ app.get("/test-connection", async (req, res) => {
     `);
   }
 });
+
+/**
+ * Получает действительный API токен Remonline, при необходимости обновляя его
+ * @returns {Promise<string|null>} Действительный токен или null при ошибке
+ */
+async function getApiToken() {
+  try {
+    // Проверяем, есть ли токен и не истек ли он
+    if (REMONLINE_API_TOKEN && REMONLINE_TOKEN_EXPIRY && Date.now() < REMONLINE_TOKEN_EXPIRY) {
+      console.log(`📋 Используем кэшированный токен Remonline (${REMONLINE_API_TOKEN.substring(0, 5)}...)`);
+      return REMONLINE_API_TOKEN;
+    }
+    
+    // Если токена нет или он истек, получаем новый
+    console.log(`🔄 Токен отсутствует или истек, получаем новый...`);
+    return await updateApiToken();
+  } catch (error) {
+    console.error(`❌ Ошибка при получении API токена: ${error.message}`);
+    return null;
+  }
+}
 
 /**
  * Получает действительный API токен Remonline, при необходимости обновляя его
@@ -581,23 +600,6 @@ async function getOrderScheduledTime(orderId, providedToken = null) {
   }
 }
 
-app.listen(PORT, async () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  console.log(`REMONLINE_API_KEY установлен: ${REMONLINE_API_KEY ? 'Да' : 'Нет'}`);
-  
-  // При запуске пробуем получить новый токен
-  try {
-    const token = await updateApiToken();
-    if (token) {
-      console.log(`✅ Начальный токен API Remonline получен: ${token.substring(0, 5)}...`);
-    } else {
-      console.warn(`⚠️ Не удалось получить начальный токен API Remonline`);
-    }
-  } catch (error) {
-    console.error(`❌ Ошибка при получении начального токена: ${error.message}`);
-  }
-});
-
 // Объект для обработки разных типов событий
 const eventHandlers = {
   "Order.Created": async (data) => {
@@ -745,6 +747,46 @@ const eventHandlers = {
   },
 };
 
+// Вебхук от Remonline
+app.post("/webhook", async (req, res) => {
+  console.log("⭐ WEBHOOK RECEIVED ⭐");
+  console.log("Headers:", JSON.stringify(req.headers));
+  console.log("Raw webhook data:", JSON.stringify(req.body, null, 2));
+  try {
+    const xSignature = req.headers['x-signature'] || req.body['x-signature'];
+    if (xSignature) {
+      console.log(`Получена подпись: ${xSignature}`);
+      
+    } else {
+      console.log(`Предупреждение: запрос без подписи или ключа`);
+    }
+
+    const data = req.body;
+    console.log("🔥 Получен запрос от Remonline:", data.event_name);
+
+    const handler = eventHandlers[data.event_name];
+    let message;
+    
+    if (handler) {
+      message = await handler(data);
+      
+      // Если handler вернул null — пропускаем отправку в Telegram
+      if (message === null) {
+        console.log("⏩ Пропуск отправки сообщения в Telegram");
+        return res.status(200).send("OK (notification skipped)");
+      }
+    } else {
+      message = `📦 Событие ${data.event_name}:\nID: ${data.id}`;
+    }
+
+    // Если нужна отправка в Telegram
+    // await sendTelegramMessageWithRetry(message);
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("❌ Ошибка обработки запроса:", error);
+    res.status(200).send("Error handled"); // Отвечаем 200 OK, чтобы Remonline не повторял запрос
+  }
+});
 
 // Тестовый эндпоинт для проверки обработки Order.Status.Changed
 app.get("/test-event", async (req, res) => {
@@ -909,34 +951,6 @@ app.get("/webhook-test", (req, res) => {
   });
 });
 
-app.post("/webhook", (req, res) => {
-  try {
-    console.log("🔔 Получен webhook от Remonline:", new Date().toLocaleString());
-    console.log("📝 Заголовки запроса:", JSON.stringify(req.headers));
-    console.log("📦 Тело запроса:", JSON.stringify(req.body));
-    
-    // Проверка структуры запроса
-    if (!req.body) {
-      console.warn("⚠️ Пустое тело запроса");
-      return res.status(200).send("Empty body");
-    }
-    
-    // Проверяем наличие поля event
-    if (!req.body.event_name && !req.body.event) {
-      console.warn("⚠️ Отсутствует поле event или event_name в запросе");
-      return res.status(200).send("Missing event field");
-    }
-    
-    // Определяем тип события
-    const eventName = req.body.event_name || req.body.event;
-    console.log(`📣 Тип события: ${eventName}`);
-    
-    // Остальной код обработки...
-  } catch (error) {
-    console.error("❌ Ошибка при обработке webhook:", error);
-    return res.status(200).send("Error handled");
-  }
-});
 
 app.get("/simulate-webhook", async (req, res) => {
   try {
@@ -1080,89 +1094,11 @@ app.get("/debug-token", async (req, res) => {
   }
 });
 
-app.get("/force-token-update", async (req, res) => {
-  try {
-    console.log("🔄 Принудительное обновление токена");
-    
-    // Сбрасываем существующий токен
-    REMONLINE_API_TOKEN = '';
-    REMONLINE_TOKEN_EXPIRY = 0;
-    
-    // Получаем новый токен
-    const newToken = await updateApiToken();
-    
-    if (newToken) {
-      res.send(`
-        <h2>✅ Токен успешно обновлен</h2>
-        <p><strong>Новый токен:</strong> ${newToken.substring(0, 5)}...</p>
-        <p><strong>Действителен до:</strong> ${new Date(REMONLINE_TOKEN_EXPIRY).toLocaleString()}</p>
-        <p><a href="/test-get-order?order_id=53174480">Проверить получение заказа</a></p>
-      `);
-    } else {
-      res.status(500).send("❌ Не удалось обновить токен");
-    }
-  } catch (error) {
-    console.error("❌ Ошибка:", error.message);
-    res.status(500).send(`Ошибка: ${error.message}`);
-  }
+
+app.listen(PORT, () => {
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });
 
-// Отправка в Telegram с повторными попытками
-/* async function sendTelegramMessageWithRetry(text, retries = 3, delay = 2000) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-  const payload = {
-    chat_id: TELEGRAM_CHAT_ID,
-    text,
-    parse_mode: "Markdown",
-    disable_web_page_preview: true,
-  };
-
-  let lastError;
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const response = await axios.post(url, payload, {
-        headers: { "Content-Type": "application/json" },
-        timeout: 10000, 
-      });
-
-      console.log(`✅ Сообщение Telegram отправлено (попытка ${attempt}):`);
-      return response.data;
-    } catch (error) {
-      lastError = error;
-      console.error(
-        `❌ Ошибка отправки в Telegram (попытка ${attempt}/${retries}):`,
-        {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        }
-      );
-      if (error.response?.status === 429) {
-        const retryAfter = error.response.data?.parameters?.retry_after || 5;
-        console.log(`⏳ Превышен лимит запросов, ожидаем ${retryAfter} секунд`);
-        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-      } else if (error.response?.status === 400) {
-        if (error.response.data?.description?.includes("markdown")) {
-          console.log("⚠️ Проблема с Markdown, отправляем без форматирования");
-          payload.parse_mode = "";
-        }
-      } else if (attempt < retries) {
-        console.log(`⏳ Повторная попытка через ${delay / 1000} секунд...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay = delay * 1.5;
-      }
-    }
-  }
-  throw new Error(
-    `Не удалось отправить сообщение после ${retries} попыток: ${lastError.message}`
-  );
-} */
-
-
-  app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  });
 
 
 
