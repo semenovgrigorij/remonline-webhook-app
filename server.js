@@ -120,59 +120,6 @@ async function getTokenFromWordPress() {
   }
 }
 
-/**
- * Получает актуальный API токен Remonline
- * @returns {string|null} API токен или null при ошибке
- */
-async function getApiToken() {
-  try {
-    // Проверяем, есть ли у нас действительный кэшированный токен
-    const now = Math.floor(Date.now() / 1000);
-    if (api_token && token_expiry > now + 300) { // действителен еще минимум 5 минут
-      console.log(`📋 Используем кэшированный токен Remonline (${api_token.substring(0, 5)}...)`);
-      return api_token;
-    }
-    
-    // Пытаемся получить токен из WordPress
-    console.log(`🔄 Запрос токена из WordPress`);
-    
-    try {
-      const response = await axios.get(`${WORDPRESS_URL}/wp-json/amelia-remonline/v1/get-token`, {
-        params: {
-          secret: WORDPRESS_SECRET
-        },
-        timeout: 10000
-      });
-      
-      if (response.status === 200 && response.data && response.data.token) {
-        api_token = response.data.token;
-        token_expiry = response.data.expires || (now + 24*3600);
-        console.log(`✅ Получен токен из WordPress (${api_token.substring(0, 5)}...), действителен до ${new Date(token_expiry * 1000).toLocaleString()}`);
-        return api_token;
-      }
-    } catch (wpError) {
-      console.error(`⚠️ Не удалось получить токен из WordPress:`, wpError.message);
-      // Продолжаем выполнение и попробуем обновить токен локально
-    }
-    
-    // Если не удалось получить из WordPress, обновляем локально
-    console.log(`🔄 Локальное обновление токена Remonline`);
-    const newToken = await updateRemonlineToken();
-    
-    if (newToken) {
-      api_token = newToken;
-      token_expiry = now + 24*3600; // Устанавливаем срок действия на 24 часа
-      console.log(`✅ Токен обновлен локально (${api_token.substring(0, 5)}...), действителен до ${new Date(token_expiry * 1000).toLocaleString()}`);
-      return api_token;
-    }
-    
-    console.error(`❌ Не удалось получить или обновить токен Remonline`);
-    return null;
-  } catch (error) {
-    console.error(`❌ Ошибка при получении API токена:`, error.message);
-    return null;
-  }
-}
 
 /**
  * Обновляет API токен Remonline с использованием постоянного API ключа
